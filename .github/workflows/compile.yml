@@ -24,11 +24,22 @@ jobs:
     - name: Dar permisos de ejecucion a Gradle
       run: chmod +x gradlew
 
-    - name: Generar Keystore de Produccion
-      run: keytool -genkey -v -keystore release.keystore -alias carlauncher-key -keyalg RSA -keysize 2048 -validity 10000 -storepass "MiClaveSecreta123" -keypass "MiClaveSecreta123" -dname "CN=X, OU=CarOS, O=XLauncher, L=Monterrey, S=NL, C=MX"
+    - name: Recuperar clave de lanzamiento guardada
+      # La clave privada vive en los secretos del repositorio (cifrados):
+      # RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD,
+      # RELEASE_KEY_PASSWORD y RELEASE_KEY_ALIAS. Se reconstruye fuera del
+      # repo, en ../../tools/, que es donde build.gradle.kts la busca para
+      # firmar el release. Asi todos los builds (locales y de GitHub) usan
+      # LA MISMA firma y el APK se instala encima sin desinstalar.
+      # Nunca se genera una clave nueva aqui: eso cambiaba la firma en
+      # cada corrida y obligaba a borrar y reinstalar la app.
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/../../tools"
+        echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$GITHUB_WORKSPACE/../../tools/release.keystore"
+        printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' "${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" "${{ secrets.RELEASE_KEY_PASSWORD }}" "${{ secrets.RELEASE_KEY_ALIAS }}" > "$GITHUB_WORKSPACE/../../tools/release-keystore.properties"
 
     - name: Compilar APK Oficial Firmado
-      run: ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$(pwd)/release.keystore -Pandroid.injected.signing.store.password="MiClaveSecreta123" -Pandroid.injected.signing.key.alias="carlauncher-key" -Pandroid.injected.signing.key.password="MiClaveSecreta123"
+      run: ./gradlew assembleRelease
 
     - name: Generar etiqueta de tiempo para la Version
       id: date
@@ -41,13 +52,12 @@ jobs:
         name: "Car Launcher Build - ${{ env.VERSION_TAG }}"
         body: |
           ### 🚀 Car Launcher - Build Automática de Producción
-          Esta versión ha sido compilada directamente desde la nube de forma segura.
-          
-          **Cambios incluidos:**
-          - 🔐 Filtro Anti-Mock de Hardware activado (Bloqueo absoluto de Fake GPS).
-          - 📍 Arranque limpio de coordenadas en el inicio (0.0, 0.0).
-          - 🔄 Bucle automático de reconexión de antenas y proveedores.
-          - 🧭 Rumbo unificado y adaptado para el módulo de brújula.
+          Compilada desde el código de la rama main y firmada con la clave de lanzamiento guardada, así que se instala encima de la versión anterior sin desinstalar.
+
+          **Incluye:**
+          - 📍 Solo datos reales: GPS real y telemetría OBD-II (sin simulados).
+          - 🎵 Control de YouTube Music / Spotify desde la app (acceso a notificaciones).
+          - 🔐 Firmada con la clave de lanzamiento propia (misma firma en cada build).
         draft: false
         prerelease: false
         files: app/build/outputs/apk/release/app-release.apk
