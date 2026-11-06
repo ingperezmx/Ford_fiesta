@@ -13,6 +13,10 @@ jobs:
     steps:
     - name: Descargar el codigo del repositorio
       uses: actions/checkout@v4
+      with:
+        # Historial completo (incluye etiquetas): se necesita para listar
+        # los cambios desde el release anterior en las notas de la version.
+        fetch-depth: 0
 
     - name: Configurar Java (JDK 17)
       uses: actions/setup-java@v4
@@ -52,19 +56,40 @@ jobs:
       id: date
       run: echo "VERSION_TAG=v1.0.$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
+    - name: Generar notas de la version (cambios desde el release anterior)
+      # Cada cambio queda en las notas del release: se listan los mensajes
+      # de los commits desde la etiqueta del release anterior, asi no hay
+      # que editar el texto a mano en cada version.
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -n "$LAST_TAG" ]; then
+          CHANGES=$(git log --pretty=format:"- %s" "$LAST_TAG"..HEAD)
+        else
+          CHANGES=$(git log --pretty=format:"- %s" -10)
+        fi
+        if [ -z "$CHANGES" ]; then
+          CHANGES="- $(git log --pretty=format:"%s" -1)"
+        fi
+        {
+          echo "### 🚀 Car Launcher - Build Automática de Producción"
+          echo "Compilada desde el código de la rama main y firmada con la clave de lanzamiento guardada, así que se instala encima de la versión anterior sin desinstalar."
+          echo ""
+          echo "**Cambios en esta versión:**"
+          echo "$CHANGES"
+          echo ""
+          echo "**Incluye:**"
+          echo "- 📍 Solo datos reales: GPS real y telemetría OBD-II (sin simulados)."
+          echo "- 🎵 Control de YouTube Music / Spotify desde la app (acceso a notificaciones)."
+          echo "- 🔐 Firmada con la clave de lanzamiento propia (misma firma en cada build)."
+        } > release-body.md
+        cat release-body.md
+
     - name: Crear Release Automatica en GitHub
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.VERSION_TAG }}
         name: "Car Launcher Build - ${{ env.VERSION_TAG }}"
-        body: |
-          ### 🚀 Car Launcher - Build Automática de Producción
-          Compilada desde el código de la rama main y firmada con la clave de lanzamiento guardada, así que se instala encima de la versión anterior sin desinstalar.
-
-          **Incluye:**
-          - 📍 Solo datos reales: GPS real y telemetría OBD-II (sin simulados).
-          - 🎵 Control de YouTube Music / Spotify desde la app (acceso a notificaciones).
-          - 🔐 Firmada con la clave de lanzamiento propia (misma firma en cada build).
+        body_path: release-body.md
         draft: false
         prerelease: false
         files: app/build/outputs/apk/release/app-release.apk
