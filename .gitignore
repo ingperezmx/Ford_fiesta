@@ -1,0 +1,46 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Decompiled & Dalvik artifacts
+*.dex
+launcher47_dex/
+syu_music_dex/
+scratch/
+
+# Temporary root test captures
+/current_screen.png
+/hotline_screen.png
+/new_launcher_screen.png
+/organic_screen.png
+/sc_installed_check.png
+
+# Java / Kotlin class files
+*.class
+
+# Gradle & Build outputs
+.gradle/
+build/
+app/build/
+buildOutput/
+
+# Local Android SDK configuration
+local.properties
+
+# Android Studio & IDE
+*.iml
+.idea/
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.log
+
+ip_pantalla.txt

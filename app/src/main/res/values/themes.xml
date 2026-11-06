@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Base application theme for Jetpack Compose launcher.
+        Uses native Android Material theme without external XML dependencies.
+    -->
+    <style name="Theme.XCarOS" parent="android:Theme.Material.NoActionBar">
+        <!-- Status bar & navigation bar styling -->
+        <item name="android:statusBarColor">@color/bg_primary</item>
+        <item name="android:navigationBarColor">@color/bg_primary</item>
+        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+
+        <!-- Full-screen immersive for a car launcher -->
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+    </style>
+
+    <!--
+        Splash / launch theme applied before Compose takes over.
+        Prevents white flash on automotive head unit cold boot.
+    -->
+    <style name="Theme.XCarOS.Splash" parent="Theme.XCarOS">
+        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+</resources>

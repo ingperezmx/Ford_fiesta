@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App identity -->
+    <string name="app_name">PabloCarOS</string>
+
+    <!-- Home screen greeting -->
+    <string name="greeting">Hola, Pablo</string>
+    <string name="subtitle">Buenas tardes - Bienvenido</string>
+
+    <!-- Navigation labels -->
+    <string name="nav_home">Inicio</string>
+    <string name="nav_music">Musica</string>
+    <string name="nav_maps">Mapas</string>
+    <string name="nav_phone">Telefono</string>
+    <string name="nav_settings">Ajustes</string>
+
+    <!-- Speedometer card -->
+    <string name="speedometer_label">Velocidad</string>
+    <string name="speedometer_unit">km/h</string>
+    <string name="speedometer_gps_signal">Senal GPS</string>
+    <string name="speedometer_no_signal">Sin senal</string>
+
+    <!-- Music / media card -->
+    <string name="music_card_title">Reproduciendo ahora</string>
+    <string name="music_no_track">Sin reproduccion activa</string>
+    <string name="music_play">Reproducir</string>
+    <string name="music_pause">Pausar</string>
+    <string name="music_next">Siguiente</string>
+    <string name="music_prev">Anterior</string>
+
+    <!-- Map card -->
+    <string name="map_card_title">Navegacion</string>
+    <string name="map_searching">Buscando ubicacion...</string>
+    <string name="map_open_navigation">Abrir navegacion</string>
+
+    <!-- Bluetooth card -->
+    <string name="bluetooth_card_title">Bluetooth</string>
+    <string name="bluetooth_connected">Conectado</string>
+    <string name="bluetooth_disconnected">Desconectado</string>
+    <string name="bluetooth_searching">Buscando dispositivos...</string>
+
+    <!-- Notification listener -->
+    <string name="notification_listener_label">Escuchador de notificaciones PabloCarOS</string>
+
+    <!-- Permissions rationale -->
+    <string name="permission_location_rationale">PabloCarOS necesita acceso a tu ubicacion para mostrar la velocidad GPS y la navegacion.</string>
+    <string name="permission_bluetooth_rationale">PabloCarOS necesita acceso a Bluetooth para conectar tu telefono y reproducir audio en el coche.</string>
+    <string name="permission_notification_rationale">PabloCarOS necesita acceso a las notificaciones para mostrar informacion de reproduccion de musica.</string>
+
+    <!-- General UI -->
+    <string name="ok">Aceptar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="retry">Reintentar</string>
+    <string name="close">Cerrar</string>
+    <string name="loading">Cargando...</string>
+    <string name="error_generic">Se produjo un error. Intentalo de nuevo.</string>
+</resources>

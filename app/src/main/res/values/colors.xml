@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ── Backgrounds ── -->
+    <color name="bg_primary">#FF060B19</color>
+    <color name="bg_card">#FF0D1B3A</color>
+    <color name="bg_card_dark">#FF091326</color>
+
+    <!-- ── Borders ── -->
+    <color name="border_bright">#FF1E3A8A</color>
+
+    <!-- ── Music card gradient ── -->
+    <color name="music_purple_start">#FF3B0764</color>
+    <color name="music_purple_end">#FF1E1B4B</color>
+
+    <!-- ── Accent ── -->
+    <color name="accent_blue">#FF1D4ED8</color>
+    <color name="accent_neon">#FF60A5FA</color>
+
+    <!-- ── Text ── -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFB0BEC5</color>
+
+    <!-- ── Speedometer ── -->
+    <color name="speedometer_arc">#FF3B82F6</color>
+</resources>

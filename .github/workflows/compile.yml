@@ -1,0 +1,55 @@
+name: Compilar APK de Car Launcher
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar el codigo del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar Java (JDK 17)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        cache: 'gradle'
+
+    - name: Dar permisos de ejecucion a Gradle
+      run: chmod +x gradlew
+
+    - name: Generar Keystore de Produccion
+      run: keytool -genkey -v -keystore release.keystore -alias carlauncher-key -keyalg RSA -keysize 2048 -validity 10000 -storepass "MiClaveSecreta123" -keypass "MiClaveSecreta123" -dname "CN=X, OU=CarOS, O=XLauncher, L=Monterrey, S=NL, C=MX"
+
+    - name: Compilar APK Oficial Firmado
+      run: ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$(pwd)/release.keystore -Pandroid.injected.signing.store.password="MiClaveSecreta123" -Pandroid.injected.signing.key.alias="carlauncher-key" -Pandroid.injected.signing.key.password="MiClaveSecreta123"
+
+    - name: Generar etiqueta de tiempo para la Version
+      id: date
+      run: echo "VERSION_TAG=v1.0.$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
+
+    - name: Crear Release Automatica en GitHub
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.VERSION_TAG }}
+        name: "Car Launcher Build - ${{ env.VERSION_TAG }}"
+        body: |
+          ### 🚀 Car Launcher - Build Automática de Producción
+          Esta versión ha sido compilada directamente desde la nube de forma segura.
+          
+          **Cambios incluidos:**
+          - 🔐 Filtro Anti-Mock de Hardware activado (Bloqueo absoluto de Fake GPS).
+          - 📍 Arranque limpio de coordenadas en el inicio (0.0, 0.0).
+          - 🔄 Bucle automático de reconexión de antenas y proveedores.
+          - 🧭 Rumbo unificado y adaptado para el módulo de brújula.
+        draft: false
+        prerelease: false
+        files: app/build/outputs/apk/release/app-release.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
