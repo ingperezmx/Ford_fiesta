@@ -158,9 +158,18 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
     // aparece una cancion el efecto se cancela solo.
     LaunchedEffect(listenerEnabled, hasTrack) {
         if (listenerEnabled && !hasTrack) {
+            var tries = 0
             while (true) {
                 delay(5000)
-                PowerampNotificationListener.refreshNow(context)
+                tries++
+                // El rebind suave (refreshNow) no despierta el servicio en
+                // algunas pantallas FYT: cada ~30 s se intenta la reconexion
+                // forzada (reinicia el componente) mientras siga caido.
+                if (!PowerampNotificationListener.isServiceRunning && tries % 6 == 0) {
+                    PowerampNotificationListener.forceReconnect(context)
+                } else {
+                    PowerampNotificationListener.refreshNow(context)
+                }
             }
         }
     }
@@ -380,9 +389,10 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                 )
 
                 // Si no aparece ninguna cancion aunque este sonando, el
-                // servicio de escucha no se enlazo: este boton lo vuelve
-                // a buscar a mano (el panel tambien lo reintenta solo
-                // cada 5 s mientras no haya pista).
+                // servicio de escucha no se enlazo: este boton fuerza la
+                // reconexion (reinicia el componente y pide el rebind).
+                // El panel tambien lo reintenta solo cada 5 s mientras no
+                // haya pista, con un intento fuerte cada ~30 s.
                 if (!hasTrack && listenerEnabled) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(
@@ -390,7 +400,7 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .border(BorderStroke(1.dp, Color(0xFFFF0033)), RoundedCornerShape(10.dp))
-                            .clickable { PowerampNotificationListener.refreshNow(context) }
+                            .clickable { PowerampNotificationListener.forceReconnect(context) }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -399,6 +409,16 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFF0033)
+                        )
+                    }
+                    if (!PowerampNotificationListener.isServiceRunning) {
+                        Text(
+                            text = "El servicio no arrancó. Si tras Reconectar sigue en NO, reinicia la pantalla del auto.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
                         )
                     }
                 }

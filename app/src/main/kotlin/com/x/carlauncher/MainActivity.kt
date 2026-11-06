@@ -423,7 +423,16 @@ class MainActivity : ComponentActivity() {
         // re-enlazar el servicio de escucha y re-leer las sesiones activas:
         // tras actualizar la app el servicio puede quedar sin enlazar y el
         // panel se queda en "Nada sonando" aunque la musica este sonando.
-        com.x.carlauncher.media.PowerampNotificationListener.refreshNow(applicationContext)
+        // Si el servicio esta caido, se fuerza la reconexion (reinicia el
+        // componente); si esta corriendo, basta con el rebind suave.
+        val mediaListener = com.x.carlauncher.media.PowerampNotificationListener
+        if (!mediaListener.isServiceRunning &&
+            mediaListener.isNotificationAccessGranted(applicationContext)
+        ) {
+            mediaListener.forceReconnect(applicationContext)
+        } else {
+            mediaListener.refreshNow(applicationContext)
+        }
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {

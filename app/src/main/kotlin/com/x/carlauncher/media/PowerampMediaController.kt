@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioManager
@@ -216,6 +217,37 @@ class PowerampNotificationListener : NotificationListenerService() {
                     requestRebind(ComponentName(context, PowerampNotificationListener::class.java))
                 } catch (_: Exception) {}
             }
+        }
+
+        /**
+         * Reconexion forzada del servicio de escucha. En algunas pantallas
+         * FYT el sistema no vuelve a enlazar el NotificationListenerService
+         * tras actualizar la app aunque el acceso siga concedido, y el
+         * requestRebind() de refreshNow no lo despierta (el panel se queda
+         * en "Servicio: NO"). Apagar y volver a encender el componente
+         * (nuestro propio servicio, sin permiso especial) obliga al sistema
+         * a reconectarlo; despues se pide el rebind explicito. No mata la
+         * app (DONT_KILL_APP). Si ni asi arranca, queda reiniciar la pantalla.
+         */
+        fun forceReconnect(context: Context) {
+            try {
+                val pm = context.packageManager
+                val component = ComponentName(context, PowerampNotificationListener::class.java)
+                pm.setComponentEnabledSetting(
+                    component,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                pm.setComponentEnabledSetting(
+                    component,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                Log.i(TAG, "Componente del listener reiniciado, pidiendo rebind")
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo reiniciar el componente del listener", e)
+            }
+            refreshNow(context)
         }
 
         /**
