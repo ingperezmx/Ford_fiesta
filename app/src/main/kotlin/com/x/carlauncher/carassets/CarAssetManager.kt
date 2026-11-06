@@ -22,50 +22,50 @@ enum class CarSlot(
     BASE(
         title = "Vehiculo Base (Luz Diurna)",
         subtitle = "Carroceria principal con luces apagadas",
-        filename = "custom_corolla_base.png",
-        defaultDrawableRes = R.drawable.corolla_base
+        filename = "custom_fiesta_base.png",
+        defaultDrawableRes = R.drawable.fiesta_base
     ),
     LIGHTS_ON(
         title = "Vehiculo (Luces Encendidas / Noche)",
         subtitle = "Carroceria con faros principales y antinieblas iluminados",
-        filename = "custom_corolla_lights_on.png",
-        defaultDrawableRes = R.drawable.corolla_lights_on
+        filename = "custom_fiesta_lights_on.png",
+        defaultDrawableRes = R.drawable.fiesta_lights_on
     ),
     DOOR_FR(
         title = "Puerta Delantera Derecha (Copiloto)",
-        subtitle = "Capa de puerta del copiloto abierta",
-        filename = "custom_corolla_door_fr.png",
-        defaultDrawableRes = R.drawable.corolla_door_fr
+        subtitle = "Resaltado de la puerta del copiloto abierta",
+        filename = "custom_fiesta_door_fr.png",
+        defaultDrawableRes = R.drawable.fiesta_door_fr
     ),
     DOOR_FL(
         title = "Puerta Delantera Izquierda (Conductor)",
-        subtitle = "Capa de puerta del conductor abierta",
-        filename = "custom_corolla_door_fl.png",
-        defaultDrawableRes = R.drawable.corolla_door_fl
+        subtitle = "Resaltado de la puerta del conductor abierta",
+        filename = "custom_fiesta_door_fl.png",
+        defaultDrawableRes = R.drawable.fiesta_door_fl
     ),
     DOOR_RR(
         title = "Puerta Trasera Derecha",
-        subtitle = "Capa de puerta trasera derecha abierta",
-        filename = "custom_corolla_door_rr.png",
-        defaultDrawableRes = R.drawable.corolla_door_rr
+        subtitle = "Resaltado de la puerta trasera derecha abierta",
+        filename = "custom_fiesta_door_rr.png",
+        defaultDrawableRes = R.drawable.fiesta_door_rr
     ),
     DOOR_RL(
         title = "Puerta Trasera Izquierda",
-        subtitle = "Capa de puerta trasera izquierda abierta",
-        filename = "custom_corolla_door_rl.png",
-        defaultDrawableRes = R.drawable.corolla_door_rl
+        subtitle = "Resaltado de la puerta trasera izquierda abierta",
+        filename = "custom_fiesta_door_rl.png",
+        defaultDrawableRes = R.drawable.fiesta_door_rl
     ),
     HOOD(
         title = "Capo / Vano Motor",
-        subtitle = "Capa del capo levantado mostrando el motor",
-        filename = "custom_corolla_hood.png",
-        defaultDrawableRes = R.drawable.corolla_hood
+        subtitle = "Resaltado del capo abierto",
+        filename = "custom_fiesta_hood.png",
+        defaultDrawableRes = R.drawable.fiesta_hood
     ),
     TRUNK(
-        title = "Maletero / Aleron",
-        subtitle = "Capa del maletero con aleron deportivo levantado",
-        filename = "custom_corolla_trunk.png",
-        defaultDrawableRes = R.drawable.corolla_trunk
+        title = "Maletero / Cajuela",
+        subtitle = "Resaltado de la cajuela abierta",
+        filename = "custom_fiesta_trunk.png",
+        defaultDrawableRes = R.drawable.fiesta_trunk
     );
 }
 

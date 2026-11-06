@@ -10,6 +10,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
+ * Matriz de recolorado 3x3 (sin traslacion) para una pintura del Fiesta.
+ *
+ * Metodo: rotacion de tono que preserva la luminancia + escala de croma +
+ * realce de brillo proporcional al "azul" (B - luminancia). Todo lineal, asi
+ * que cabe en una ColorMatrix 4x5. La clave: un pixel GRIS (ventanas, ruedas,
+ * llantas, faros, parrilla) tiene croma 0 y B == luminancia, asi que la
+ * matriz lo deja EXACTAMENTE igual. Solo la carroceria azul saturada cambia
+ * de color. Las matrices anteriores usaban el canal azul crudo y pintaban
+ * tambien las ventanas y las ruedas del color de la carroceria.
+ */
+private fun recolorMatrix(
+    m00: Float, m01: Float, m02: Float,
+    m10: Float, m11: Float, m12: Float,
+    m20: Float, m21: Float, m22: Float
+): ColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
+    m00, m01, m02, 0f, 0f,
+    m10, m11, m12, 0f, 0f,
+    m20, m21, m22, 0f, 0f,
+    0f,  0f,  0f,  1f, 0f
+)))
+
+/**
  * Colores oficiales del catalogo Ford Fiesta (2014-2019).
  */
 enum class FiestaColor(
@@ -33,126 +55,112 @@ enum class FiestaColor(
         displayName = "Rojo Rubi Metalico",
         paintCode = "D4",
         swatchColor = Color(0xFFDC2626),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.10f, 0.05f, 1.25f, 0f, 0f,
-            0.05f, 0.20f, 0.05f, 0f, 0f,
-            0.05f, 0.05f, 0.20f, 0f, 0f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.10f, 0.05f, 1.25f, 0f, 0f,
-            0.05f, 0.20f, 0.05f, 0f, 0f,
-            0.05f, 0.05f, 0.20f, 0f, 0f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            -0.735f, 0.100f, 1.635f,
+            0.997f, -0.735f, 0.738f,
+            0.100f, 0.997f, -0.097f
+        ),
+        highwayColorFilter = recolorMatrix(
+            -0.735f, 0.100f, 1.635f,
+            0.997f, -0.735f, 0.738f,
+            0.100f, 0.997f, -0.097f
+        )
     ),
     OXFORD_WHITE(
         id = "oxford_white",
         displayName = "Blanco Oxford",
         paintCode = "YZ",
         swatchColor = Color(0xFFF8FAFC),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.38f, 0.38f, 0.38f, 0f, 95f,
-            0.38f, 0.38f, 0.38f, 0f, 95f,
-            0.38f, 0.38f, 0.38f, 0f, 100f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.38f, 0.38f, 0.38f, 0f, 50f,
-            0.38f, 0.38f, 0.38f, 0f, 50f,
-            0.38f, 0.38f, 0.38f, 0f, 55f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            -0.875f, -0.875f, 2.750f,
+            -0.875f, -0.875f, 2.750f,
+            -0.875f, -0.875f, 2.750f
+        ),
+        highwayColorFilter = recolorMatrix(
+            -0.875f, -0.875f, 2.750f,
+            -0.875f, -0.875f, 2.750f,
+            -0.875f, -0.875f, 2.750f
+        )
     ),
     SHADOW_BLACK(
         id = "shadow_black",
         displayName = "Negro Sombra / Tuxedo",
         paintCode = "G1",
         swatchColor = Color(0xFF0F172A),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.28f, 0.28f, 0.28f, 0f, -45f,
-            0.28f, 0.28f, 0.28f, 0f, -45f,
-            0.28f, 0.28f, 0.28f, 0f, -40f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.30f, 0.30f, 0.30f, 0f, -35f,
-            0.30f, 0.30f, 0.30f, 0f, -35f,
-            0.30f, 0.30f, 0.30f, 0f, -30f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            0.594f, 0.594f, -0.189f,
+            0.594f, 0.594f, -0.189f,
+            0.594f, 0.594f, -0.189f
+        ),
+        highwayColorFilter = recolorMatrix(
+            0.594f, 0.594f, -0.189f,
+            0.594f, 0.594f, -0.189f,
+            0.594f, 0.594f, -0.189f
+        )
     ),
     INGOT_SILVER(
         id = "ingot_silver",
         displayName = "Plata Lingote Metalico",
         paintCode = "UX",
         swatchColor = Color(0xFFCBD5E1),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.38f, 0.38f, 0.38f, 0f, 35f,
-            0.38f, 0.38f, 0.38f, 0f, 35f,
-            0.38f, 0.38f, 0.38f, 0f, 40f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.38f, 0.38f, 0.38f, 0f, 25f,
-            0.38f, 0.38f, 0.38f, 0f, 25f,
-            0.38f, 0.38f, 0.38f, 0f, 30f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            -0.636f, -0.636f, 2.272f,
+            -0.636f, -0.636f, 2.272f,
+            -0.636f, -0.636f, 2.272f
+        ),
+        highwayColorFilter = recolorMatrix(
+            -0.636f, -0.636f, 2.272f,
+            -0.636f, -0.636f, 2.272f,
+            -0.636f, -0.636f, 2.272f
+        )
     ),
     MAGNETIC_GRAY(
         id = "magnetic_gray",
         displayName = "Gris Magnetico",
         paintCode = "J7",
         swatchColor = Color(0xFF475569),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.33f, 0.33f, 0.33f, 0f, -10f,
-            0.33f, 0.33f, 0.33f, 0f, -10f,
-            0.33f, 0.33f, 0.33f, 0f, -5f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.33f, 0.33f, 0.33f, 0f, -15f,
-            0.33f, 0.33f, 0.33f, 0f, -15f,
-            0.33f, 0.33f, 0.33f, 0f, -10f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            0.364f, 0.114f, 0.522f,
+            0.114f, 0.364f, 0.522f,
+            0.114f, 0.114f, 0.772f
+        ),
+        highwayColorFilter = recolorMatrix(
+            0.364f, 0.114f, 0.522f,
+            0.114f, 0.364f, 0.522f,
+            0.114f, 0.114f, 0.772f
+        )
     ),
     GREEN_ENVY(
         id = "green_envy",
         displayName = "Verde Envidia Metalico",
         paintCode = "HD",
         swatchColor = Color(0xFF10B981),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.15f, 0.05f, 0.05f, 0f, 0f,
-            0.10f, 0.30f, 1.10f, 0f, 5f,
-            0.05f, 0.10f, 0.20f, 0f, 0f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.15f, 0.05f, 0.05f, 0f, 0f,
-            0.10f, 0.30f, 1.10f, 0f, 5f,
-            0.05f, 0.10f, 0.20f, 0f, 0f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            0.674f, 0.406f, -0.080f,
+            -0.942f, 0.674f, 1.268f,
+            0.406f, -0.942f, 1.536f
+        ),
+        highwayColorFilter = recolorMatrix(
+            0.674f, 0.406f, -0.080f,
+            -0.942f, 0.674f, 1.268f,
+            0.406f, -0.942f, 1.536f
+        )
     ),
     MOLTEN_ORANGE(
         id = "molten_orange",
         displayName = "Naranja Fundido Metalico",
         paintCode = "Y8",
         swatchColor = Color(0xFFF97316),
-        colorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.10f, 0.10f, 1.35f, 0f, 10f,
-            0.05f, 0.15f, 0.65f, 0f, 0f,
-            0.05f, 0.05f, 0.10f, 0f, 0f,
-            0f,    0f,    0f,    1f, 0f
-        ))),
-        highwayColorFilter = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0.10f, 0.10f, 1.35f, 0f, 10f,
-            0.05f, 0.15f, 0.65f, 0f, 0f,
-            0.05f, 0.05f, 0.10f, 0f, 0f,
-            0f,    0f,    0f,    1f, 0f
-        )))
+        colorFilter = recolorMatrix(
+            -1.070f, 0.320f, 1.750f,
+            0.520f, -1.070f, 1.550f,
+            0.320f, 0.520f, 0.160f
+        ),
+        highwayColorFilter = recolorMatrix(
+            -1.070f, 0.320f, 1.750f,
+            0.520f, -1.070f, 1.550f,
+            0.320f, 0.520f, 0.160f
+        )
     );
 
     companion object {

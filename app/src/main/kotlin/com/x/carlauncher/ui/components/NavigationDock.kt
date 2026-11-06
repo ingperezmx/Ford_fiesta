@@ -232,7 +232,7 @@ private fun NavDockItem(
                     )
                 } else {
                     Image(
-                        painter = painterResource(R.drawable.corolla_base),
+                        painter = painterResource(R.drawable.fiesta_base),
                         contentDescription = item.contentDescription,
                         modifier = Modifier
                             .size(34.dp)

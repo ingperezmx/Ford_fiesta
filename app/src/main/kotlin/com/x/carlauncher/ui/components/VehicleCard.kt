@@ -537,7 +537,7 @@ fun VehicleCard(
                                         slot = if (isLightsOn) CarSlot.LIGHTS_ON else CarSlot.BASE,
                                         visible = true,
                                         modifier = carWidth,
-                                        fallbackRes = if (isLightsOn) R.drawable.corolla_lights_on else R.drawable.corolla_base,
+                                        fallbackRes = if (isLightsOn) R.drawable.fiesta_lights_on else R.drawable.fiesta_base,
                                         colorFilter = activeFiestaColor.colorFilter
                                     )
 
