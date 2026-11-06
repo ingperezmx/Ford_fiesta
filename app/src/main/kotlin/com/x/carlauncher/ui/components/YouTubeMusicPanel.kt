@@ -133,6 +133,10 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
     var restrictedAllowed by remember {
         mutableStateOf(PowerampNotificationListener.isRestrictedSettingsAllowed(context))
     }
+    val isYouTubeMusic = mediaState.playerName.contains("youtube", ignoreCase = true) ||
+        mediaState.playerName.contains("ytmusic", ignoreCase = true)
+    val hasTrack = mediaState.title.isNotBlank()
+
     LaunchedEffect(listenerEnabled) {
         if (!listenerEnabled) {
             while (true) {
@@ -146,12 +150,22 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
             }
         }
     }
+
+    // Si el acceso esta concedido pero no aparece ninguna cancion, el
+    // servicio de escucha se quedo sin enlazar (pasa tras actualizar la
+    // app: el sistema no siempre lo vuelve a arrancar solo). Reintentar
+    // cada 5 s mientras el panel este visible y no haya pista; en cuanto
+    // aparece una cancion el efecto se cancela solo.
+    LaunchedEffect(listenerEnabled, hasTrack) {
+        if (listenerEnabled && !hasTrack) {
+            while (true) {
+                delay(5000)
+                PowerampNotificationListener.refreshNow(context)
+            }
+        }
+    }
     val effectiveProgressMs = if (isUserSeeking) seekPositionMs else mediaState.progressMs
     val durationMs = mediaState.durationMs.coerceAtLeast(1L)
-
-    val isYouTubeMusic = mediaState.playerName.contains("youtube", ignoreCase = true) ||
-        mediaState.playerName.contains("ytmusic", ignoreCase = true)
-    val hasTrack = mediaState.title.isNotBlank()
 
     Card(
         modifier = modifier,
@@ -347,6 +361,30 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                         .fillMaxWidth()
                         .padding(top = 2.dp)
                 )
+
+                // Si no aparece ninguna cancion aunque este sonando, el
+                // servicio de escucha no se enlazo: este boton lo vuelve
+                // a buscar a mano (el panel tambien lo reintenta solo
+                // cada 5 s mientras no haya pista).
+                if (!hasTrack && listenerEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(BorderStroke(1.dp, Color(0xFFFF0033)), RoundedCornerShape(10.dp))
+                            .clickable { PowerampNotificationListener.refreshNow(context) }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Reconectar",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF0033)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 

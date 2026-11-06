@@ -441,6 +441,11 @@ class MainActivity : ComponentActivity() {
         // Passive status update for lyrics & track title (never steals UI focus)
         com.x.carlauncher.media.FytMusicService.requestStateUpdate(applicationContext)
         com.x.carlauncher.whatsapp.WhatsAppMessageManager.performCheck(applicationContext, notifyIfNew = false)
+        // Al volver a CarOS (desde YouTube Music, desde Ajustes...) hay que
+        // re-enlazar el servicio de escucha y re-leer las sesiones activas:
+        // tras actualizar la app el servicio puede quedar sin enlazar y el
+        // panel se queda en "Nada sonando" aunque la musica este sonando.
+        com.x.carlauncher.media.PowerampNotificationListener.refreshNow(applicationContext)
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
