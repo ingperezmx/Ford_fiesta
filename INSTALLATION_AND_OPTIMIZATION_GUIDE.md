@@ -58,7 +58,7 @@ Esta es la forma más moderna, fácil y segura. No tienes que tocar código ni a
 
 ```text
 Quiero instalar y optimizar PabloCarOS en la pantalla Android de mi auto usando el repositorio oficial:
-https://github.com/TioXavi/PabloCarOS
+[https://github.com/ingperezmx/Ford_fiesta]
 
 Tengo mi laptop con Windows y mi pantalla Android conectadas a la misma red WiFi.
 Quiero que tú hagas todo el trabajo técnico por mí directamente en mi equipo:
