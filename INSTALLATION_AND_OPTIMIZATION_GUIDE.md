@@ -127,13 +127,42 @@ Reglas:
 4. Si la conexión es rechazada (puerto 5555 cerrado), guíalo a través de la sección de [Desbloqueo de Pantallas](#-cómo-abrir-el-puerto-de-conexión-si-tu-pantalla-viene-bloqueada).
 
 ### Fase B: Auditoría de Hardware de la Pantalla
-Ejecuta la radiografía del dispositivo para detectar su arquitectura y plataforma:
+Ejecuta la radiografía completa del dispositivo y anota los resultados antes de seguir: la plataforma y la versión de Android determinan qué pasos aplican después (por ejemplo, el paso de "configuración restringida" solo existe en Android 13 o más reciente).
 ```powershell
+# SoC / plataforma del chip
 adb -s <IP>:5555 shell getprop ro.board.platform
+adb -s <IP>:5555 shell getprop ro.hardware
+adb -s <IP>:5555 shell getprop ro.product.board
+adb -s <IP>:5555 shell "cat /proc/cpuinfo | grep -i hardware"
+
+# RAM real instalada (MemTotal es la memoria física total del equipo)
+adb -s <IP>:5555 shell "cat /proc/meminfo | grep MemTotal"
+
+# Versión de Android y nivel de API
+adb -s <IP>:5555 shell getprop ro.build.version.release
+adb -s <IP>:5555 shell getprop ro.build.version.sdk
+
+# Resolución y densidad de la pantalla
 adb -s <IP>:5555 shell wm size
 adb -s <IP>:5555 shell wm density
-adb -s <IP>:5555 shell "pm list packages | grep -E 'syu|tw\.|microntek|ts\.'"
+
+# Fabricante, modelo y huella de compilación (ayudan a identificar la plataforma)
+adb -s <IP>:5555 shell getprop ro.product.manufacturer
+adb -s <IP>:5555 shell getprop ro.product.model
+adb -s <IP>:5555 shell getprop ro.build.fingerprint
+
+# Paquetes del sistema que identifican la plataforma (FYT / TopWay / MTC / TS)
+adb -s <IP>:5555 shell "pm list packages | grep -E 'syu|fyt|topway|tw\.|microntek|mtc|ts\.'"
 ```
+
+Cómo leer el resultado:
+- **FYT** (la más común, por ejemplo UIS7862 / UIS8141E): aparecen paquetes `com.syu.*` y la plataforma suele ser `ums512` o `ums9230`.
+- **TopWay**: paquetes `com.tw.*` o `com.topway.*`.
+- **Microntek / MTC** (Rockchip): paquetes `com.microntek.*` o `com.mtc.*`.
+- **TS10 / TS18**: paquetes `com.ts.*`.
+- **RAM**: `MemTotal` dice la memoria física real en kB (por ejemplo 4194304 kB = 4 GB). Anótala junto con el resto de la auditoría: sirve para saber si la pantalla va justa de memoria o sobrada.
+- **Versión de Android**: si es 13 o más reciente, en la Fase D hay que hacer primero el paso manual de "Permitir configuración restringida" antes de conceder el acceso a notificaciones.
+
 *Si la pantalla es TopWay o Microntek, el sistema utiliza automáticamente `AutomotiveIntentResolver.kt` para vincular el marcador telefónico y los ajustes del auto.*
 
 ### Fase C: Modificaciones y Optimizaciones Profundas (60 FPS)
