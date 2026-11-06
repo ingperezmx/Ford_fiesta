@@ -11,8 +11,13 @@ android {
         applicationId = "com.x.carlauncher"
         minSdk = 26
         targetSdk = 33
-        versionCode = 1
-        versionName = "1.0.0"
+        // versionCode sube en cada entrega: Android solo actualiza la app
+        // instalada si el APK nuevo trae un versionCode mayor o igual.
+        // (Antes siempre era 1, y con cada cambio de firma habia que
+        // desinstalar; con la clave de lanzamiento fijada y este numero
+        // subiendo, las proximas actualizaciones se instalan encima.)
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -55,6 +60,7 @@ android {
             }
         }
         pinnedDebugKeystore.exists() -> {
+            logger.warn("ADVERTENCIA: no se encontro el keystore de lanzamiento; el APK se firmara con la clave de depuracion y NO se podra actualizar encima de la version de lanzamiento. Restaura <workspace>/tools/release.keystore.")
             signingConfigs.create("pinnedDebug") {
                 storeFile = pinnedDebugKeystore
                 storePassword = "android"
@@ -63,6 +69,7 @@ android {
             }
         }
         else -> {
+            logger.warn("ADVERTENCIA: no se encontro ningun keystore fijado; el APK se firmara con la clave de depuracion por defecto y NO se podra actualizar encima de la version de lanzamiento.")
             signingConfigs.getByName("debug")
         }
     }
