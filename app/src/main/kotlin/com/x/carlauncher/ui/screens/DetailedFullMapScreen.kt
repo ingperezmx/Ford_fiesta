@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -35,7 +37,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,9 +52,12 @@ import com.x.carlauncher.navigation.ActiveNavRoute
 import com.x.carlauncher.navigation.CarRouteManager
 import com.x.carlauncher.navigation.MapDownloadWorker
 import com.x.carlauncher.navigation.OfflineMapManager
+import com.x.carlauncher.navigation.PlaceResult
+import com.x.carlauncher.navigation.PlaceSearch
 import com.x.carlauncher.voice.CarVoiceAssistant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -69,6 +76,76 @@ data class NavDestination(
     val category: String,
     val geoPoint: GeoPoint
 )
+
+/**
+ * Fila de destino: sirve igual para un lugar guardado, una busqueda
+ * reciente o un resultado de la busqueda de lugares.
+ */
+@Composable
+private fun DestinationRow(
+    dest: NavDestination,
+    isSelected: Boolean,
+    distanceText: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) Color(0xFF00E5FF).copy(alpha = 0.2f) else Color(0xFF1E293B),
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) Color(0xFF00E5FF) else Color(0xFF334155)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = when {
+                        dest.category.contains("Hogar") -> Icons.Default.Home
+                        dest.category.contains("Combustible") -> Icons.Default.LocalGasStation
+                        dest.category.contains("Supermercado") -> Icons.Default.ShoppingCart
+                        else -> Icons.Default.Place
+                    },
+                    contentDescription = null,
+                    tint = Color(0xFF38BDF8),
+                    modifier = Modifier.size(18.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = dest.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = dest.category,
+                        fontSize = 10.sp,
+                        color = Color(0xFF94A3B8),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Text(
+                text = distanceText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF10B981)
+            )
+        }
+    }
+}
 
 /**
  * Full-Screen Detailed Navigation Screen ("MAPA FULL") for X CarOS.
@@ -106,6 +183,38 @@ fun DetailedFullMapScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
+    // ── Busqueda de lugares (Nominatim / OpenStreetMap) ──────────────
+    // Resultados de la busqueda: null = aun no se busco (se muestran los
+    // lugares guardados y las busquedas recientes).
+    var searchResults by remember { mutableStateOf<List<PlaceResult>?>(null) }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var recentPlaces by remember { mutableStateOf(PlaceSearch.getRecent(context)) }
+    val searchScope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun performSearch() {
+        val q = searchQuery.trim()
+        if (q.isBlank()) {
+            searchResults = null
+            searchError = null
+            return
+        }
+        keyboardController?.hide()
+        searchScope.launch {
+            isSearching = true
+            searchError = null
+            try {
+                searchResults = PlaceSearch.search(q)
+            } catch (_: Exception) {
+                searchError = "Sin conexión para buscar. Revisa el internet e inténtalo de nuevo."
+                searchResults = emptyList()
+            } finally {
+                isSearching = false
+            }
+        }
+    }
+
     // Preset Destinations around vehicle area (Nuevo Leon / Monterrey / San Nicolas).
     // Sin distancias ni tiempos inventados: la distancia se calcula con el
     // GPS real y el ETA solo existe cuando hay una ruta real calculada.
@@ -135,6 +244,22 @@ fun DetailedFullMapScreen(
     }
 
     var selectedDestination by remember { mutableStateOf(defaultDestinations.first()) }
+
+    // Elegir un destino (fijo, buscado o reciente): la ruta OSRM se
+    // calcula sola por el LaunchedEffect(selectedDestination) y el boton
+    // "Navegar en Pantalla" arranca la navegacion guiada.
+    fun pickPlace(dest: NavDestination, saveRecent: PlaceResult? = null) {
+        if (saveRecent != null) {
+            PlaceSearch.saveRecent(context, saveRecent)
+            recentPlaces = PlaceSearch.getRecent(context)
+        }
+        selectedDestination = dest
+        searchQuery = dest.name
+        showSearchOverlay = false
+        try {
+            CarVoiceAssistant.getInstance(context).speak("Destino seleccionado: ${dest.name}")
+        } catch (_: Exception) {}
+    }
 
     // Map references
     var mapRef by remember { mutableStateOf<MapView?>(null) }
@@ -477,7 +602,13 @@ fun DetailedFullMapScreen(
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFF0F172A).copy(alpha = 0.90f))
                 .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-                .clickable { showSearchOverlay = true }
+                .clickable {
+                    // Al abrir, limpiar la busqueda anterior para que se
+                    // vean los lugares guardados y las busquedas recientes.
+                    searchResults = null
+                    searchError = null
+                    showSearchOverlay = true
+                }
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Row(
@@ -872,67 +1003,135 @@ fun DetailedFullMapScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        // ── Buscar cualquier lugar (Nominatim / OpenStreetMap) ──
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                if (it.isBlank()) {
+                                    searchResults = null
+                                    searchError = null
+                                }
+                            },
+                            placeholder = {
+                                Text(
+                                    text = "Busca un lugar: tienda, dirección, ciudad...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { performSearch() }),
+                            trailingIcon = {
+                                IconButton(onClick = { performSearch() }) {
+                                    Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color(0xFF00E5FF))
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00E5FF),
+                                unfocusedBorderColor = Color(0xFF334155),
+                                cursorColor = Color(0xFF00E5FF)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.heightIn(max = 280.dp)
                         ) {
-                            items(defaultDestinations) { dest ->
-                                Surface(
-                                    onClick = {
-                                        selectedDestination = dest
-                                        searchQuery = dest.name
-                                        showSearchOverlay = false
-                                        try {
-                                            CarVoiceAssistant.getInstance(context).speak("Destino seleccionado: ${dest.name}")
-                                        } catch (_: Exception) {}
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (dest == selectedDestination) Color(0xFF00E5FF).copy(alpha = 0.2f) else Color(0xFF1E293B),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (dest == selectedDestination) Color(0xFF00E5FF) else Color(0xFF334155)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
+                            when {
+                                isSearching -> {
+                                    item {
                                         Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = when {
-                                                    dest.category.contains("Hogar") -> Icons.Default.Home
-                                                    dest.category.contains("Combustible") -> Icons.Default.LocalGasStation
-                                                    dest.category.contains("Supermercado") -> Icons.Default.ShoppingCart
-                                                    else -> Icons.Default.Place
-                                                },
-                                                contentDescription = null,
-                                                tint = Color(0xFF38BDF8),
-                                                modifier = Modifier.size(18.dp)
+                                            CircularProgressIndicator(
+                                                color = Color(0xFF00E5FF),
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp
                                             )
-                                            Column {
-                                                Text(
-                                                    text = dest.name,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White
-                                                )
-                                                Text(
-                                                    text = dest.category,
-                                                    fontSize = 10.sp,
-                                                    color = Color(0xFF94A3B8)
-                                                )
-                                            }
+                                            Text(text = "Buscando...", fontSize = 13.sp, color = Color.White)
                                         }
+                                    }
+                                }
+                                searchError != null -> {
+                                    item {
                                         Text(
-                                            text = distanceKmTo(dest.geoPoint)?.let { String.format("%.1f km", it) } ?: "Sin GPS",
+                                            text = searchError ?: "",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFFFF8A95),
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
+                                    }
+                                }
+                                searchResults != null -> {
+                                    val results = searchResults ?: emptyList()
+                                    if (results.isEmpty()) {
+                                        item {
+                                            Text(
+                                                text = "Sin resultados. Intenta con otro nombre o una dirección.",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF94A3B8),
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    } else {
+                                        items(results) { place ->
+                                            val dest = place.toDestination()
+                                            DestinationRow(
+                                                dest = dest,
+                                                isSelected = dest == selectedDestination,
+                                                distanceText = distanceKmTo(place.geoPoint)?.let { String.format("%.1f km", it) } ?: "Sin GPS",
+                                                onClick = { pickPlace(dest, saveRecent = place) }
+                                            )
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    if (recentPlaces.isNotEmpty()) {
+                                        item {
+                                            Text(
+                                                text = "Recientes",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF94A3B8),
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+                                        items(recentPlaces) { place ->
+                                            val dest = place.toDestination()
+                                            DestinationRow(
+                                                dest = dest,
+                                                isSelected = dest == selectedDestination,
+                                                distanceText = distanceKmTo(place.geoPoint)?.let { String.format("%.1f km", it) } ?: "Sin GPS",
+                                                onClick = { pickPlace(dest, saveRecent = place) }
+                                            )
+                                        }
+                                    }
+                                    item {
+                                        Text(
+                                            text = "Lugares guardados",
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF10B981)
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF94A3B8),
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                    items(defaultDestinations) { dest ->
+                                        DestinationRow(
+                                            dest = dest,
+                                            isSelected = dest == selectedDestination,
+                                            distanceText = distanceKmTo(dest.geoPoint)?.let { String.format("%.1f km", it) } ?: "Sin GPS",
+                                            onClick = { pickPlace(dest) }
                                         )
                                     }
                                 }
