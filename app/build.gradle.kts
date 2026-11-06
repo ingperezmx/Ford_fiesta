@@ -1,23 +1,28 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.x.carlauncher"
-    compileSdk = 34
+    // API 36 (Android 16): Google Play exige targetSdk 36 o mayor para apps
+    // nuevas desde el 31-ago-2026. minSdk se queda en 26 (la pantalla FYT
+    // del auto es Android 13 y sigue siendo compatible).
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "com.x.carlauncher"
         minSdk = 26
-        targetSdk = 33
+        targetSdk = 36
         // versionCode sube en cada entrega: Android solo actualiza la app
         // instalada si el APK nuevo trae un versionCode mayor o igual.
         // (Antes siempre era 1, y con cada cambio de firma habia que
         // desinstalar; con la clave de lanzamiento fijada y este numero
         // subiendo, las proximas actualizaciones se instalan encima.)
-        versionCode = 12
-        versionName = "1.0.11"
+        versionCode = 13
+        versionName = "1.0.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -100,10 +105,6 @@ android {
 
     buildFeatures {
         compose = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
     }
 
     packaging {

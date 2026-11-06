@@ -21,6 +21,13 @@ jobs:
         java-version: '17'
         cache: 'gradle'
 
+    - name: Instalar SDK de Android 16 (API 36)
+      # compileSdk/targetSdk 36 (obligatorio para Google Play desde
+      # el 31-ago-2026). El runner trae varias plataformas, pero esta
+      # asegura que esten la 36 y sus build-tools.
+      run: |
+        echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+
     - name: Dar permisos de ejecucion a Gradle
       run: chmod +x gradlew
 
