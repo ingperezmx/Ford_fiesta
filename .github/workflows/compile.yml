@@ -87,7 +87,7 @@ jobs:
           echo "- 🎤 Karaoke con letras y traducción."
           echo "- 🌤️ Clima en tiempo real."
           echo "- 🎭 6 temas."
-          echo "- 🪟 Acceso rápido a Microsoft Launcher."
+          echo "- 🪟 Acceso rápido al Launcher Principal."
           echo "- 📐 Tablero adaptable a cualquier pantalla (se escala en proporción, sin nada movido)."
           echo "- 🔐 Firmada con la clave de lanzamiento propia (misma firma en cada build)."
           echo "- 📱 Android 16 (API 36)."
