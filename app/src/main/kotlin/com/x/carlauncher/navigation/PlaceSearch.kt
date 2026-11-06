@@ -45,14 +45,18 @@ object PlaceSearch {
         .build()
 
     /**
-     * Busca lugares en Mexico por nombre o direccion. Lanza excepcion si
-     * no hay internet o el servicio falla; devuelve lista vacia si no hay
-     * coincidencias.
+     * Busca lugares por nombre o direccion en todo el continente americano
+     * (Mexico, Estados Unidos, Canada, Centroamerica, Sudamerica...). Sin
+     * restriccion de pais: el viewbox del continente solo le da preferencia
+     * a resultados de America, y si ahi no hay nada devuelve del resto del
+     * mundo. Lanza excepcion si no hay internet o el servicio falla;
+     * devuelve lista vacia si no hay coincidencias.
      */
     suspend fun search(query: String): List<PlaceResult> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
         val url = "https://nominatim.openstreetmap.org/search" +
-            "?format=json&addressdetails=1&limit=8&countrycodes=mx&accept-language=es&q=$q"
+            "?format=json&addressdetails=1&limit=8&accept-language=es" +
+            "&viewbox=-170,-60,-10,85&q=$q"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "CarOS Ford Fiesta/1.0.4 (Android)")
