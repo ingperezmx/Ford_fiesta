@@ -1313,6 +1313,10 @@ object XLocalPlayer {
         Log.i(TAG, "handleNextCommand: isBtActive=$isBtActive, isBtConnected=$isBtConnected")
         if (isBtConnected && isBtActive) {
             FytMusicService.sendBtNext(context)
+        } else if (PowerampNotificationListener.isExternalSessionActive()) {
+            // YouTube Music / Spotify sonando: el boton del volante o del
+            // widget FYT pasa a la siguiente cancion de esa app, no de la local.
+            PowerampNotificationListener.skipToNext(context)
         } else {
             next()
         }
@@ -1324,6 +1328,8 @@ object XLocalPlayer {
         Log.i(TAG, "handlePrevCommand: isBtActive=$isBtActive, isBtConnected=$isBtConnected")
         if (isBtConnected && isBtActive) {
             FytMusicService.sendBtPrev(context)
+        } else if (PowerampNotificationListener.isExternalSessionActive()) {
+            PowerampNotificationListener.skipToPrevious(context)
         } else {
             previous()
         }
@@ -1335,6 +1341,8 @@ object XLocalPlayer {
         Log.i(TAG, "handlePlayPauseCommand: isBtActive=$isBtActive, isBtConnected=$isBtConnected")
         if (isBtConnected && isBtActive) {
             FytMusicService.sendBtPlayPause(context)
+        } else if (PowerampNotificationListener.isExternalSessionActive()) {
+            PowerampNotificationListener.togglePlayPause(context)
         } else {
             togglePlayPause()
         }
@@ -1346,6 +1354,8 @@ object XLocalPlayer {
         Log.i(TAG, "handlePlayCommand: isBtActive=$isBtActive, isBtConnected=$isBtConnected")
         if (isBtConnected && isBtActive) {
             FytMusicService.sendBtPlayPause(context)
+        } else if (PowerampNotificationListener.isExternalSessionActive()) {
+            PowerampNotificationListener.play(context)
         } else {
             play()
         }
@@ -1357,6 +1367,8 @@ object XLocalPlayer {
         Log.i(TAG, "handlePauseCommand: isBtActive=$isBtActive, isBtConnected=$isBtConnected")
         if (isBtConnected && isBtActive) {
             FytMusicService.sendBtPlayPause(context)
+        } else if (PowerampNotificationListener.isExternalSessionActive()) {
+            PowerampNotificationListener.pause(context)
         } else {
             pause()
         }

@@ -132,10 +132,18 @@
         </service>
 
         <!-- Musica local / OEM (servicio en primer plano) -->
+        <!-- El filtro com.fyt.launcher.music / com.syu.music es como el
+             sistema FYT encuentra este servicio para sincronizar la musica
+             del launcher y los widgets (igual que en el repo original). -->
         <service
             android:name=".media.FytMusicService"
             android:foregroundServiceType="mediaPlayback"
-            android:exported="false" />
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.fyt.launcher.music" />
+                <action android:name="com.syu.music" />
+            </intent-filter>
+        </service>
 
         <!-- Gestion de energia ACC / apagado del vehiculo -->
         <service
@@ -151,6 +159,28 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Botones del volante (SWC), widget FYT y teclas multimedia:
+             sin esta declaracion Android nunca entrega estos broadcasts a
+             la app y los botones del volante no controlan la musica.
+             La clase ya existia en FytMusicService.kt; solo faltaba
+             declararla aqui (igual que en el repo original). -->
+        <receiver
+            android:name=".media.FytMusicReceiver"
+            android:exported="true">
+            <intent-filter android:priority="1000">
+                <action android:name="com.fyt.launcher.music" />
+                <action android:name="com.syu.music" />
+                <action android:name="syu.widget.playpause" />
+                <action android:name="syu.widget.next" />
+                <action android:name="syu.widget.last" />
+                <action android:name="syu.widget.prev" />
+                <action android:name="com.syu.music.playpause" />
+                <action android:name="com.syu.music.next" />
+                <action android:name="com.syu.music.prev" />
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 

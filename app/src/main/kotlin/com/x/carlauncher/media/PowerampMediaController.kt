@@ -227,6 +227,14 @@ class PowerampNotificationListener : NotificationListenerService() {
          * defecto, los botones controlaban la musica local aunque YouTube
          * Music estuviera sonando.
          */
+        /**
+         * ¿Hay una sesion externa (YouTube Music, Spotify...) que deba recibir
+         * los botones? Lo usan los comandos de XLocalPlayer (volante / widget
+         * FYT / teclas multimedia) para que esos botones controlen la app
+         * que esta sonando y no solo la musica local.
+         */
+        fun isExternalSessionActive(): Boolean = shouldUseExternalController()
+
         private fun shouldUseExternalController(): Boolean {
             val controller = activeController ?: return false
             if (_currentSource.value == AudioSource.ONLINE) return true
