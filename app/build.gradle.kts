@@ -20,22 +20,51 @@ android {
         }
     }
 
-    // Firma de depuracion fijada: el keystore de depuracion vive en
-    // <workspace>/tools/debug.keystore (fuera del repo y persistente entre
-    // reemplazos de la VM). Asi la huella SHA-1 del APK no cambia y el
-    // cliente OAuth de Android registrado en Google Cloud sigue valiendo.
-    // Si el archivo no existe (por ejemplo en GitHub Actions), se usa la
-    // configuracion de depuracion normal.
-    val pinnedDebugKeystore = rootProject.file("../../tools/debug.keystore")
-    val releaseSigning = if (pinnedDebugKeystore.exists()) {
-        signingConfigs.create("pinnedDebug") {
-            storeFile = pinnedDebugKeystore
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
+    // Firma de lanzamiento propia: el APK se firmaba con la clave de
+    // depuracion de Android (una clave publica y conocida), y Play Protect
+    // lo marcaba como app insegura y bloqueaba permisos especiales.
+    // Ahora se firma con un keystore de lanzamiento propio y unico que
+    // vive en <workspace>/tools/release.keystore (fuera del repo y
+    // persistente entre reemplazos de la VM), con su clave en
+    // <workspace>/tools/release-keystore.properties. Asi la huella SHA-1
+    // del APK es estable y propia. Si esos archivos no existen (por
+    // ejemplo en GitHub Actions), se usa la clave de depuracion fijada
+    // y en ultimo caso la de depuracion normal.
+    // (En Kotlin DSL no se puede usar java.util.Properties: "java" es el
+    // accesorio de la extension de AGP; se lee el archivo a mano.)
+    val releaseKeystorePropsFile = rootProject.file("../../tools/release-keystore.properties")
+    val releaseKeystoreProps: Map<String, String> = if (releaseKeystorePropsFile.exists()) {
+        releaseKeystorePropsFile.readLines()
+            .mapNotNull { line ->
+                val parts = line.split("=", limit = 2)
+                if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
+            }
+            .toMap()
     } else {
-        signingConfigs.getByName("debug")
+        emptyMap()
+    }
+    val releaseKeystoreFile = rootProject.file("../../tools/release.keystore")
+    val pinnedDebugKeystore = rootProject.file("../../tools/debug.keystore")
+    val releaseSigning = when {
+        releaseKeystoreFile.exists() && releaseKeystoreProps["storePassword"] != null -> {
+            signingConfigs.create("releaseKey") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseKeystoreProps["storePassword"]
+                keyAlias = releaseKeystoreProps["keyAlias"] ?: "caros"
+                keyPassword = releaseKeystoreProps["keyPassword"] ?: releaseKeystoreProps["storePassword"]
+            }
+        }
+        pinnedDebugKeystore.exists() -> {
+            signingConfigs.create("pinnedDebug") {
+                storeFile = pinnedDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+        else -> {
+            signingConfigs.getByName("debug")
+        }
     }
 
     buildTypes {
