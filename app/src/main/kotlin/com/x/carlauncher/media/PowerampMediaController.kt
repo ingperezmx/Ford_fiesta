@@ -158,6 +158,43 @@ class PowerampNotificationListener : NotificationListenerService() {
         }
 
         /**
+         * ¿Android permite activar los ajustes restringidos para CarOS?
+         * En Android 13+ las apps instaladas desde un archivo (no desde
+         * Play Store) tienen bloqueados los permisos especiales (acceso a
+         * notificaciones, mostrar sobre otras apps...) hasta que el usuario
+         * toca "Permitir configuracion restringida" en la info de la app.
+         * Se detecta con el app-op interno "android:access_restricted_settings".
+         */
+        fun isRestrictedSettingsAllowed(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+            return try {
+                val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
+                    ?: return true
+                val mode = appOps.checkOpNoThrow(
+                    "android:access_restricted_settings",
+                    android.os.Process.myUid(),
+                    context.packageName
+                )
+                mode == android.app.AppOpsManager.MODE_ALLOWED
+            } catch (_: Exception) {
+                true
+            }
+        }
+
+        /** Abre la ficha "Info de la app" en Ajustes, donde esta el menu ⋮ con "Permitir configuracion restringida". */
+        fun openAppInfoSettings(context: Context) {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo abrir la info de la app", e)
+            }
+        }
+
+        /**
          * Reintenta conectar el listener y refrescar las sesiones activas.
          * Se llama cuando el usuario vuelve de Ajustes tras activar el
          * acceso, para que el control empiece a funcionar sin reiniciar.

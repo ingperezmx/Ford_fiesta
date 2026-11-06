@@ -239,30 +239,61 @@ class MainActivity : ComponentActivity() {
             var showListenerPrompt by remember {
                 mutableStateOf(!com.x.carlauncher.media.PowerampNotificationListener.isNotificationAccessGranted(applicationContext))
             }
+            // ¿Android deja activar los ajustes restringidos? Si no, el
+            // primer paso es permitirlos desde la info de la app; si ya
+            // estan permitidos, se pide directo el acceso a notificaciones.
+            val restrictedAllowed = remember {
+                com.x.carlauncher.media.PowerampNotificationListener.isRestrictedSettingsAllowed(applicationContext)
+            }
             XCarOSTheme(theme = currentTheme) {
                 DashboardScreen()
                 if (showListenerPrompt) {
-                    AlertDialog(
-                        onDismissRequest = { showListenerPrompt = false },
-                        title = { Text("Controlar YouTube Music") },
-                        text = {
-                            Text(
-                                "Para que CarOS pueda ver y controlar lo que suena en " +
-                                "YouTube Music, Spotify y otras apps, activa el acceso a " +
-                                "notificaciones para CarOS. Es un permiso de Ajustes, no " +
-                                "aparece en la lista de permisos normal."
-                            )
-                        },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                showListenerPrompt = false
-                                com.x.carlauncher.media.PowerampNotificationListener.openNotificationAccessSettings(applicationContext)
-                            }) { Text("Activar") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showListenerPrompt = false }) { Text("Ahora no") }
-                        }
-                    )
+                    if (!restrictedAllowed) {
+                        AlertDialog(
+                            onDismissRequest = { showListenerPrompt = false },
+                            title = { Text("Permiso restringido por Android") },
+                            text = {
+                                Text(
+                                    "Como CarOS se instaló desde un archivo, Android bloquea " +
+                                    "los permisos especiales hasta que los autorices. Son 2 pasos:\n\n" +
+                                    "1. Toca 'Abrir info de la app', luego los 3 puntos (⋮) y " +
+                                    "'Permitir configuración restringida'.\n" +
+                                    "2. Después activa el acceso a notificaciones para CarOS."
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showListenerPrompt = false
+                                    com.x.carlauncher.media.PowerampNotificationListener.openAppInfoSettings(applicationContext)
+                                }) { Text("Abrir info de la app") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showListenerPrompt = false }) { Text("Ahora no") }
+                            }
+                        )
+                    } else {
+                        AlertDialog(
+                            onDismissRequest = { showListenerPrompt = false },
+                            title = { Text("Controlar YouTube Music") },
+                            text = {
+                                Text(
+                                    "Para que CarOS pueda ver y controlar lo que suena en " +
+                                    "YouTube Music, Spotify y otras apps, activa el acceso a " +
+                                    "notificaciones para CarOS. Es un permiso de Ajustes, no " +
+                                    "aparece en la lista de permisos normal."
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showListenerPrompt = false
+                                    com.x.carlauncher.media.PowerampNotificationListener.openNotificationAccessSettings(applicationContext)
+                                }) { Text("Activar") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showListenerPrompt = false }) { Text("Ahora no") }
+                            }
+                        )
+                    }
                 }
             }
         }

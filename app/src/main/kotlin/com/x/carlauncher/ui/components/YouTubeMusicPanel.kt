@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -124,10 +126,18 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
     var listenerEnabled by remember {
         mutableStateOf(PowerampNotificationListener.isNotificationAccessGranted(context))
     }
+    // ¿Android deja activar los ajustes restringidos? Sin esto, el boton
+    // "Activar" no sirve: la pantalla de acceso a notificaciones sale
+    // bloqueada. Se revisa junto con el acceso, para que el aviso cambie
+    // solo de "Permitir" (info de la app) a "Activar" (notificaciones).
+    var restrictedAllowed by remember {
+        mutableStateOf(PowerampNotificationListener.isRestrictedSettingsAllowed(context))
+    }
     LaunchedEffect(listenerEnabled) {
         if (!listenerEnabled) {
             while (true) {
                 delay(2000)
+                restrictedAllowed = PowerampNotificationListener.isRestrictedSettingsAllowed(context)
                 if (PowerampNotificationListener.isNotificationAccessGranted(context)) {
                     listenerEnabled = true
                     PowerampNotificationListener.refreshNow(context)
@@ -159,7 +169,11 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                 )
                 .padding(14.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            // La columna es desplazable y la caratula es baja: antes el
+            // contenido era mas alto que la tarjeta y los controles
+            // (transporte, volumen, boton Abrir) quedaban cortados abajo
+            // y no se veian. Con scroll nada queda inalcanzable.
+            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
                 // ── Cabecera YouTube Music ───────────────────────────────────
                 Row(
@@ -223,6 +237,10 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                 }
 
                 // ── Aviso: sin acceso a notificaciones el control no funciona ──
+                // Si Android tiene bloqueados los ajustes restringidos, el
+                // boton abre la info de la app ("Permitir"): ahi, en el
+                // menu ⋮, se toca "Permitir configuracion restringida" y
+                // despues ya se puede activar el acceso a notificaciones.
                 if (!listenerEnabled) {
                     Row(
                         modifier = Modifier
@@ -240,7 +258,11 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "Activa el acceso a notificaciones para controlar YouTube Music",
+                            text = if (!restrictedAllowed) {
+                                "Android bloquea los permisos: permite la configuración restringida para poder activar el control"
+                            } else {
+                                "Activa el acceso a notificaciones para controlar YouTube Music"
+                            },
                             fontSize = 11.sp,
                             color = Color.White,
                             modifier = Modifier.weight(1f)
@@ -249,12 +271,18 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color(0xFFFF0033))
-                                .clickable { PowerampNotificationListener.openNotificationAccessSettings(context) }
+                                .clickable {
+                                    if (!restrictedAllowed) {
+                                        PowerampNotificationListener.openAppInfoSettings(context)
+                                    } else {
+                                        PowerampNotificationListener.openNotificationAccessSettings(context)
+                                    }
+                                }
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Activar",
+                                text = if (!restrictedAllowed) "Permitir" else "Activar",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -270,7 +298,7 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1.6f)
+                        .aspectRatio(2.4f)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFF0F172A))
                         .border(BorderStroke(1.dp, Color(0xFF1E293B)), RoundedCornerShape(16.dp)),
@@ -472,7 +500,10 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                     )
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                // Separador fijo (antes era weight(1f), que no funciona
+                // dentro de una columna con scroll: se colapsa o se estira
+                // sin control y empujaba el boton fuera de la tarjeta).
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // ── Abrir YouTube Music ──────────────────────────────────────
                 Box(
