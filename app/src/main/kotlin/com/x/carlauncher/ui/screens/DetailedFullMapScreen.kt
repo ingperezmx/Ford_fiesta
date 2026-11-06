@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -45,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.x.carlauncher.R
 import com.x.carlauncher.location.VehicleCompassManager
 import com.x.carlauncher.location.VehicleLocationManager
@@ -183,9 +187,12 @@ fun DetailedFullMapScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
+    // Foco del campo de busqueda: al abrir la ventana el teclado se abre solo.
+    val searchFocusRequester = remember { FocusRequester() }
+
     // ── Busqueda de lugares (Nominatim / OpenStreetMap) ──────────────
-    // Resultados de la busqueda: null = aun no se busco (se muestran los
-    // lugares guardados y las busquedas recientes).
+    // Resultados de la busqueda: null = aun no se busco (se muestran las
+    // busquedas recientes).
     var searchResults by remember { mutableStateOf<List<PlaceResult>?>(null) }
     var isSearching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
@@ -245,7 +252,7 @@ fun DetailedFullMapScreen(
 
     var selectedDestination by remember { mutableStateOf(defaultDestinations.first()) }
 
-    // Elegir un destino (fijo, buscado o reciente): la ruta OSRM se
+    // Elegir un destino (buscado o reciente): la ruta OSRM se
     // calcula sola por el LaunchedEffect(selectedDestination) y el boton
     // "Navegar en Pantalla" arranca la navegacion guiada.
     fun pickPlace(dest: NavDestination, saveRecent: PlaceResult? = null) {
@@ -969,18 +976,27 @@ fun DetailedFullMapScreen(
 
         // ── 7. Search Overlay Modal: Quick Destination Selection ─────────────────
         if (showSearchOverlay) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .clickable { showSearchOverlay = false },
-                contentAlignment = Alignment.Center
+            // Ventana de dialogo propia (no un Box sobre el mapa): asi el
+            // campo de texto recibe el foco y el teclado se abre aunque la
+            // pantalla del auto no lo muestre al tocar el campo.
+            Dialog(
+                onDismissRequest = { showSearchOverlay = false },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    dismissOnClickOutside = true,
+                    dismissOnBackPress = true
+                )
             ) {
+                val dialogKeyboardController = LocalSoftwareKeyboardController.current
+                LaunchedEffect(Unit) {
+                    delay(200)
+                    searchFocusRequester.requestFocus()
+                    dialogKeyboardController?.show()
+                }
                 Card(
                     modifier = Modifier
                         .width(420.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .clickable(enabled = false) {},
+                        .clip(RoundedCornerShape(20.dp)),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
                     border = BorderStroke(1.5.dp, Color(0xFF00E5FF).copy(alpha = 0.6f))
                 ) {
@@ -1035,8 +1051,22 @@ fun DetailedFullMapScreen(
                                 unfocusedBorderColor = Color(0xFF334155),
                                 cursorColor = Color(0xFF00E5FF)
                             ),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(searchFocusRequester)
                         )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = { performSearch() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
+                        ) {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF0F172A))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Buscar", color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
+                        }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
@@ -1097,6 +1127,9 @@ fun DetailedFullMapScreen(
                                     }
                                 }
                                 else -> {
+                                    // Solo los lugares que el usuario busco
+                                    // (Recientes). Los lugares fijos anteriores
+                                    // ya no se muestran.
                                     if (recentPlaces.isNotEmpty()) {
                                         item {
                                             Text(
@@ -1116,23 +1149,15 @@ fun DetailedFullMapScreen(
                                                 onClick = { pickPlace(dest, saveRecent = place) }
                                             )
                                         }
-                                    }
-                                    item {
-                                        Text(
-                                            text = "Lugares guardados",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF94A3B8),
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        )
-                                    }
-                                    items(defaultDestinations) { dest ->
-                                        DestinationRow(
-                                            dest = dest,
-                                            isSelected = dest == selectedDestination,
-                                            distanceText = distanceKmTo(dest.geoPoint)?.let { String.format("%.1f km", it) } ?: "Sin GPS",
-                                            onClick = { pickPlace(dest) }
-                                        )
+                                    } else {
+                                        item {
+                                            Text(
+                                                text = "Escribe arriba el lugar que buscas y toca Buscar. Los lugares que elijas aparecerán aquí en Recientes.",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF94A3B8),
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
