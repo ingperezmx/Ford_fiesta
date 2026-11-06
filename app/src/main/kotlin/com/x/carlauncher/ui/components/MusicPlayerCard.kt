@@ -83,18 +83,10 @@ fun MusicPlayerCard(
     var listenerEnabled by remember {
         mutableStateOf(PowerampNotificationListener.isNotificationAccessGranted(context))
     }
-    // ¿Android deja activar los ajustes restringidos? Sin esto, el boton
-    // "Activar" no sirve: la pantalla de acceso a notificaciones sale
-    // bloqueada. Se revisa junto con el acceso, para que el aviso cambie
-    // solo de "Permitir" (info de la app) a "Activar" (notificaciones).
-    var restrictedAllowed by remember {
-        mutableStateOf(PowerampNotificationListener.isRestrictedSettingsAllowed(context))
-    }
     LaunchedEffect(listenerEnabled) {
         if (!listenerEnabled) {
             while (true) {
                 delay(2000)
-                restrictedAllowed = PowerampNotificationListener.isRestrictedSettingsAllowed(context)
                 if (PowerampNotificationListener.isNotificationAccessGranted(context)) {
                     listenerEnabled = true
                     PowerampNotificationListener.refreshNow(context)
@@ -241,51 +233,61 @@ fun MusicPlayerCard(
 
             // ── Aviso de ayuda ───────────────────────────────────────────
             // Sin acceso a notificaciones el control de YouTube Music no
-            // puede funcionar. Si Android tiene bloqueados los ajustes
-            // restringidos, el boton abre la info de la app ("Permitir"):
-            // ahi, en el menu ⋮, se toca "Permitir configuracion
-            // restringida" y despues ya se puede activar el acceso.
+            // puede funcionar. Los dos pasos se muestran SIEMPRE: no se
+            // puede confiar solo en detectar si los ajustes restringidos
+            // estan permitidos (la deteccion puede fallar en algunas ROMs),
+            // asi que el usuario tiene los dos botones a mano: 1. Permitir
+            // (info de la app, menu ⋮, "Permitir configuracion restringida")
+            // y 2. Activar (pantalla de acceso a notificaciones).
             // Si ya esta activo y no suena nada, ofrece abrir YouTube Music.
             if (!listenerEnabled) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 6.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color(0xFFFF0033).copy(alpha = 0.18f))
                         .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.NotificationsOff,
-                        contentDescription = null,
-                        tint = Color(0xFFFF8A95),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (!restrictedAllowed) {
-                            "Android bloquea los permisos: permite la configuración restringida para poder activar el control"
-                        } else {
-                            "Activa el acceso a notificaciones para controlar YouTube Music"
-                        },
-                        fontSize = 11.sp,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
-                        onClick = {
-                            if (!restrictedAllowed) {
-                                PowerampNotificationListener.openAppInfoSettings(context)
-                            } else {
-                                PowerampNotificationListener.openNotificationAccessSettings(context)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0033)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(text = if (!restrictedAllowed) "Permitir" else "Activar", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Icon(
+                            imageVector = Icons.Default.NotificationsOff,
+                            contentDescription = null,
+                            tint = Color(0xFFFF8A95),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Activa el acceso a notificaciones para controlar YouTube Music. Son 2 pasos:",
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = { PowerampNotificationListener.openAppInfoSettings(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0033)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(text = "1. Permitir", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { PowerampNotificationListener.openNotificationAccessSettings(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0033)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(text = "2. Activar", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             } else if (mediaState.title.isBlank() && PowerampNotificationListener.activeController == null) {

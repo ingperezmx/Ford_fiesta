@@ -194,6 +194,14 @@ class PowerampNotificationListener : NotificationListenerService() {
             }
         }
 
+        /** ¿El servicio de escucha esta corriendo? (diagnostico del panel). */
+        val isServiceRunning: Boolean
+            get() = instance != null
+
+        /** Paquete de la sesion multimedia enlazada, o null si no hay ninguna. */
+        val activeSessionPackage: String?
+            get() = activeController?.packageName
+
         /**
          * Reintenta conectar el listener y refrescar las sesiones activas.
          * Se llama cuando el usuario vuelve de Ajustes tras activar el

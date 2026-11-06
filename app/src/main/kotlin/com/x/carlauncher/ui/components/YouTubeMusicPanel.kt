@@ -251,56 +251,73 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                 }
 
                 // ── Aviso: sin acceso a notificaciones el control no funciona ──
-                // Si Android tiene bloqueados los ajustes restringidos, el
-                // boton abre la info de la app ("Permitir"): ahi, en el
-                // menu ⋮, se toca "Permitir configuracion restringida" y
-                // despues ya se puede activar el acceso a notificaciones.
+                // Los dos pasos se muestran SIEMPRE: no se puede confiar solo
+                // en detectar si los ajustes restringidos estan permitidos
+                // (la deteccion puede fallar en algunas ROMs), asi que el
+                // usuario tiene los dos botones a mano: 1. Permitir (info
+                // de la app, menu ⋮, "Permitir configuracion restringida")
+                // y 2. Activar (pantalla de acceso a notificaciones).
                 if (!listenerEnabled) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xFFFF0033).copy(alpha = 0.18f))
                             .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsOff,
-                            contentDescription = null,
-                            tint = Color(0xFFFF8A95),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = if (!restrictedAllowed) {
-                                "Android bloquea los permisos: permite la configuración restringida para poder activar el control"
-                            } else {
-                                "Activa el acceso a notificaciones para controlar YouTube Music"
-                            },
-                            fontSize = 11.sp,
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFFF0033))
-                                .clickable {
-                                    if (!restrictedAllowed) {
-                                        PowerampNotificationListener.openAppInfoSettings(context)
-                                    } else {
-                                        PowerampNotificationListener.openNotificationAccessSettings(context)
-                                    }
-                                }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = if (!restrictedAllowed) "Permitir" else "Activar",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                            Icon(
+                                imageVector = Icons.Default.NotificationsOff,
+                                contentDescription = null,
+                                tint = Color(0xFFFF8A95),
+                                modifier = Modifier.size(18.dp)
                             )
+                            Text(
+                                text = "Activa el acceso a notificaciones para controlar YouTube Music. Son 2 pasos:",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFF0033))
+                                    .clickable { PowerampNotificationListener.openAppInfoSettings(context) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "1. Permitir",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFF0033))
+                                    .clickable { PowerampNotificationListener.openNotificationAccessSettings(context) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "2. Activar",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
@@ -384,6 +401,23 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                             color = Color(0xFFFF0033)
                         )
                     }
+                }
+
+                // Linea de diagnostico (solo cuando no hay cancion): con
+                // una captura se ve de inmediato que paso falta: acceso,
+                // ajustes restringidos, servicio corriendo y sesion enlazada.
+                if (!hasTrack) {
+                    Text(
+                        text = "Acceso: ${if (listenerEnabled) "SÍ" else "NO"}" +
+                            " · Restringido: ${if (restrictedAllowed) "NO" else "SÍ"}" +
+                            " · Servicio: ${if (PowerampNotificationListener.isServiceRunning) "SÍ" else "NO"}" +
+                            " · Sesión: ${PowerampNotificationListener.activeSessionPackage?.substringAfterLast('.') ?: "—"}",
+                        fontSize = 10.sp,
+                        color = Color(0xFF64748B),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
