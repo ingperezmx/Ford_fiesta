@@ -114,6 +114,45 @@
             </intent-filter>
         </activity>
 
+        <!-- ═══ Control multimedia (YouTube Music, Spotify, etc.) ═══
+             Sin esta declaracion Android nunca crea el servicio, asi que
+             CarOS no puede ver ni controlar ninguna sesion multimedia:
+             es la razon por la que el control de YouTube no funcionaba.
+             Ademas el usuario debe activar "Acceso a notificaciones"
+             para CarOS en Ajustes del sistema (la app lo pide al arrancar). -->
+        <service
+            android:name=".media.PowerampNotificationListener"
+            android:label="Controles de música"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Musica local / OEM (servicio en primer plano) -->
+        <service
+            android:name=".media.FytMusicService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+
+        <!-- Gestion de energia ACC / apagado del vehiculo -->
+        <service
+            android:name=".services.AccOffService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <!-- Arranque del servicio ACC al encender el equipo -->
+        <receiver
+            android:name=".system.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

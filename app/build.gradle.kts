@@ -26,7 +26,7 @@ android {
     // cliente OAuth de Android registrado en Google Cloud sigue valiendo.
     // Si el archivo no existe (por ejemplo en GitHub Actions), se usa la
     // configuracion de depuracion normal.
-    val pinnedDebugKeystore = rootProject.file("../tools/debug.keystore")
+    val pinnedDebugKeystore = rootProject.file("../../tools/debug.keystore")
     val releaseSigning = if (pinnedDebugKeystore.exists()) {
         signingConfigs.create("pinnedDebug") {
             storeFile = pinnedDebugKeystore

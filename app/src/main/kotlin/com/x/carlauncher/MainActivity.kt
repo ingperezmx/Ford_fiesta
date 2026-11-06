@@ -23,8 +23,14 @@ import android.view.WindowManager
 import com.x.carlauncher.ui.theme.ThemeManager
 import com.x.carlauncher.ui.theme.XCarOSTheme
 import com.x.carlauncher.voice.CarVoiceAssistant
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -227,8 +233,37 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val currentTheme by ThemeManager.currentTheme.collectAsState()
+            // Aviso una vez por arranque: sin el acceso a notificaciones
+            // CarOS no puede ver ni controlar YouTube Music, Spotify ni
+            // ninguna otra app (el servicio de control depende de el).
+            var showListenerPrompt by remember {
+                mutableStateOf(!com.x.carlauncher.media.PowerampNotificationListener.isNotificationAccessGranted(applicationContext))
+            }
             XCarOSTheme(theme = currentTheme) {
                 DashboardScreen()
+                if (showListenerPrompt) {
+                    AlertDialog(
+                        onDismissRequest = { showListenerPrompt = false },
+                        title = { Text("Controlar YouTube Music") },
+                        text = {
+                            Text(
+                                "Para que CarOS pueda ver y controlar lo que suena en " +
+                                "YouTube Music, Spotify y otras apps, activa el acceso a " +
+                                "notificaciones para CarOS. Es un permiso de Ajustes, no " +
+                                "aparece en la lista de permisos normal."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showListenerPrompt = false
+                                com.x.carlauncher.media.PowerampNotificationListener.openNotificationAccessSettings(applicationContext)
+                            }) { Text("Activar") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showListenerPrompt = false }) { Text("Ahora no") }
+                        }
+                    )
+                }
             }
         }
     }

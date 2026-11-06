@@ -19,6 +19,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -122,6 +123,71 @@ class PowerampNotificationListener : NotificationListenerService() {
                 AudioSource.BLUETOOTH -> AudioSource.LOCAL
             }
             Log.i(TAG, "Audio source toggled to: ${_currentSource.value}")
+        }
+
+        /**
+         * ¿CarOS tiene el "Acceso a notificaciones" activado en Ajustes?
+         * Sin este permiso Android no deja que el NotificationListenerService
+         * vea las sesiones multimedia, y el control de YouTube Music,
+         * Spotify, etc. no funciona aunque el servicio este declarado.
+         * Es un permiso especial: no se pide con requestPermissions, el
+         * usuario lo activa en Ajustes del sistema (o desde el boton que
+         * abre esa pantalla con [openNotificationAccessSettings]).
+         */
+        fun isNotificationAccessGranted(context: Context): Boolean {
+            val enabled = try {
+                Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+            } catch (_: Exception) {
+                null
+            } ?: return false
+            val component = ComponentName(context, PowerampNotificationListener::class.java)
+                .flattenToString()
+            return enabled.split(":").any { it == component }
+        }
+
+        /** Abre la pantalla de Ajustes donde se activa el acceso a notificaciones. */
+        fun openNotificationAccessSettings(context: Context) {
+            try {
+                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo abrir los ajustes de acceso a notificaciones", e)
+            }
+        }
+
+        /**
+         * Reintenta conectar el listener y refrescar las sesiones activas.
+         * Se llama cuando el usuario vuelve de Ajustes tras activar el
+         * acceso, para que el control empiece a funcionar sin reiniciar.
+         */
+        fun refreshNow(context: Context) {
+            val listener = instance
+            if (listener != null) {
+                listener.refreshActiveSessions()
+            } else {
+                try {
+                    requestRebind(ComponentName(context, PowerampNotificationListener::class.java))
+                } catch (_: Exception) {}
+            }
+        }
+
+        /**
+         * ¿Los botones (play/pausa, siguiente, anterior, seek) deben ir a
+         * la sesion externa (YouTube Music, Spotify...) en vez de al
+         * reproductor local? Si, cuando el usuario eligio ONLINE, cuando la
+         * sesion externa esta sonando, o cuando lo que se muestra en
+         * pantalla ya es de esa app. Sin esto, con la fuente en LOCAL por
+         * defecto, los botones controlaban la musica local aunque YouTube
+         * Music estuviera sonando.
+         */
+        private fun shouldUseExternalController(): Boolean {
+            val controller = activeController ?: return false
+            if (_currentSource.value == AudioSource.ONLINE) return true
+            if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) return true
+            val name = _mediaState.value.playerName
+            return name != "Musica Local" && name != "Musica Pantalla"
         }
 
         @Volatile
@@ -459,7 +525,9 @@ class PowerampNotificationListener : NotificationListenerService() {
             }
 
             // 2. Online / External Player (Spotify, YouTube Music, Apple Music, Deezer, etc.)
-            if (source == AudioSource.ONLINE || (onlineController != null && _mediaState.value.playerName != "Musica Local" && _mediaState.value.playerName != "Musica Pantalla")) {
+            // Si la sesion externa esta sonando, los botones la controlan
+            // a ella aunque la fuente elegida sea LOCAL (ver shouldUseExternalController).
+            if (shouldUseExternalController()) {
                 if (onlineController != null) {
                     val isPlaying = onlineController.playbackState?.state == PlaybackState.STATE_PLAYING
                     setOptimisticPlaying(!isPlaying)
@@ -507,7 +575,7 @@ class PowerampNotificationListener : NotificationListenerService() {
             }
 
             // 2. Online / External Player
-            if (source == AudioSource.ONLINE || (onlineController != null && _mediaState.value.playerName != "Musica Local" && _mediaState.value.playerName != "Musica Pantalla")) {
+            if (shouldUseExternalController()) {
                 if (onlineController != null) {
                     try {
                         onlineController.transportControls.skipToNext()
@@ -549,7 +617,7 @@ class PowerampNotificationListener : NotificationListenerService() {
             }
 
             // 2. Online / External Player
-            if (source == AudioSource.ONLINE || (onlineController != null && _mediaState.value.playerName != "Musica Local" && _mediaState.value.playerName != "Musica Pantalla")) {
+            if (shouldUseExternalController()) {
                 if (onlineController != null) {
                     try {
                         onlineController.transportControls.skipToPrevious()
@@ -573,11 +641,19 @@ class PowerampNotificationListener : NotificationListenerService() {
             val onlineController = activeController
 
             if (isBtConnected && (source == AudioSource.BLUETOOTH || _mediaState.value.playerName == "Bluetooth Audio")) {
-                activeController?.transportControls?.seekTo(positionMs)
+                val bt = instance?.bluetoothController
+                if (bt != null) {
+                    try {
+                        bt.transportControls.seekTo(positionMs)
+                        return
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed bluetooth transportControls seekTo", e)
+                    }
+                }
                 return
             }
 
-            if (source == AudioSource.ONLINE || (onlineController != null && _mediaState.value.playerName != "Musica Local" && _mediaState.value.playerName != "Musica Pantalla")) {
+            if (shouldUseExternalController()) {
                 if (onlineController != null) {
                     try {
                         onlineController.transportControls.seekTo(positionMs)
@@ -597,6 +673,10 @@ class PowerampNotificationListener : NotificationListenerService() {
         }
 
         fun toggleShuffle(context: Context) {
+            // Solo musica local: la API de MediaSession de Android no
+            // expone aleatorio/repetir para el controlador (no existen
+            // setShuffleMode/setRepeatMode en el framework), asi que para
+            // YouTube Music o Spotify se cambian dentro de su propia app.
             if (_currentSource.value == AudioSource.LOCAL) {
                 val mode = XLocalPlayer.toggleShuffle()
                 val msg = if (mode == PlaybackMode.SHUFFLE) "Modo: Aleatorio activado" else "Modo: Secuencial en bucle"
@@ -605,6 +685,8 @@ class PowerampNotificationListener : NotificationListenerService() {
         }
 
         fun toggleRepeat(context: Context) {
+            // Solo musica local (ver toggleShuffle: el framework no expone
+            // repetir para el controlador de una sesion externa).
             if (_currentSource.value == AudioSource.LOCAL) {
                 val mode = XLocalPlayer.toggleRepeat()
                 val msg = if (mode == PlaybackMode.REPEAT_ONE) "Modo: Repetir pista actual" else "Modo: Secuencial en bucle"
@@ -1042,10 +1124,17 @@ class PowerampNotificationListener : NotificationListenerService() {
 
     private fun handleUniversalMetadata(metadata: MediaMetadata?, pkg: String?) {
         metadata ?: return
-        if (_currentSource.value == AudioSource.LOCAL) {
+        // Solo se ignora la sesion externa si la musica local esta SONANDO
+        // de verdad: si esta en pausa, la tarjeta debe mostrar la cancion
+        // de YouTube Music / Spotify (aunque este en pausa) para que los
+        // botones la controlen a ella y no a la musica local. Antes se
+        // ignoraba siempre que la fuente era LOCAL, y la tarjeta se quedaba
+        // mostrando la musica local aunque YouTube Music estuviera activo.
+        if (_currentSource.value == AudioSource.LOCAL && XLocalPlayer.isPlaying) {
             val isExtPlaying = activeController?.playbackState?.state == PlaybackState.STATE_PLAYING
             if (!isExtPlaying) {
-                // If local playback is active, do not allow background idle sessions to overwrite local state
+                // La musica local esta sonando: no dejar que una sesion
+                // externa en pausa sobrescriba lo que se muestra.
                 return
             }
         }

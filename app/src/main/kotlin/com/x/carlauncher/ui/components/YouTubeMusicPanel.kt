@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -40,6 +41,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.x.carlauncher.media.PowerampNotificationListener
+import kotlinx.coroutines.delay
 
 /**
  * Columna central de musica: controles multimedia de YouTube Music.
@@ -114,6 +117,25 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
 
     var isUserSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableStateOf(0L) }
+
+    // Acceso a notificaciones: sin el, el panel no puede ver ni controlar
+    // YouTube Music. Se revisa cada 2 s mientras falte, para que el aviso
+    // desaparezca solo cuando el usuario lo activa en Ajustes.
+    var listenerEnabled by remember {
+        mutableStateOf(PowerampNotificationListener.isNotificationAccessGranted(context))
+    }
+    LaunchedEffect(listenerEnabled) {
+        if (!listenerEnabled) {
+            while (true) {
+                delay(2000)
+                if (PowerampNotificationListener.isNotificationAccessGranted(context)) {
+                    listenerEnabled = true
+                    PowerampNotificationListener.refreshNow(context)
+                    break
+                }
+            }
+        }
+    }
     val effectiveProgressMs = if (isUserSeeking) seekPositionMs else mediaState.progressMs
     val durationMs = mediaState.durationMs.coerceAtLeast(1L)
 
@@ -198,6 +220,48 @@ fun YouTubeMusicPanel(modifier: Modifier = Modifier) {
                             )
                         }
                     }
+                }
+
+                // ── Aviso: sin acceso a notificaciones el control no funciona ──
+                if (!listenerEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFFF0033).copy(alpha = 0.18f))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsOff,
+                            contentDescription = null,
+                            tint = Color(0xFFFF8A95),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Activa el acceso a notificaciones para controlar YouTube Music",
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFFF0033))
+                                .clickable { PowerampNotificationListener.openNotificationAccessSettings(context) }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Activar",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

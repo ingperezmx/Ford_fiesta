@@ -48,6 +48,7 @@ import com.x.carlauncher.ui.theme.ColorMusicGradientEnd
 import com.x.carlauncher.ui.theme.ColorMusicGradientStart
 import com.x.carlauncher.ui.theme.ColorNeonBlue
 import com.x.carlauncher.ui.theme.XTheme
+import kotlinx.coroutines.delay
 
 /**
  * Universal media player card supporting Spotify, Poweramp, YouTube Music,
@@ -73,6 +74,27 @@ fun MusicPlayerCard(
     }
     var showLyrics by remember { mutableStateOf(false) }
     val currentSource by PowerampNotificationListener.currentSource.collectAsState()
+
+    // Acceso a notificaciones: sin el, CarOS no puede ver ni controlar
+    // YouTube Music (ni Spotify ni ninguna otra app). Se revisa cada 2 s
+    // mientras falte, para que el aviso desaparezca solo en cuanto el
+    // usuario lo activa en Ajustes y el control empiece a funcionar.
+    val context = LocalContext.current
+    var listenerEnabled by remember {
+        mutableStateOf(PowerampNotificationListener.isNotificationAccessGranted(context))
+    }
+    LaunchedEffect(listenerEnabled) {
+        if (!listenerEnabled) {
+            while (true) {
+                delay(2000)
+                if (PowerampNotificationListener.isNotificationAccessGranted(context)) {
+                    listenerEnabled = true
+                    PowerampNotificationListener.refreshNow(context)
+                    break
+                }
+            }
+        }
+    }
 
     Card(
         modifier = modifier,
@@ -206,6 +228,67 @@ fun MusicPlayerCard(
                         onAlbumClick    = onOpenPlayer,
                         modifier        = Modifier.fillMaxSize()
                     )
+                }
+            }
+
+            // ── Aviso de ayuda ───────────────────────────────────────────
+            // Sin acceso a notificaciones el control de YouTube Music no
+            // puede funcionar: el boton abre los Ajustes para activarlo.
+            // Si ya esta activo y no suena nada, ofrece abrir YouTube Music.
+            if (!listenerEnabled) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFFF0033).copy(alpha = 0.18f))
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NotificationsOff,
+                        contentDescription = null,
+                        tint = Color(0xFFFF8A95),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Activa el acceso a notificaciones para controlar YouTube Music",
+                        fontSize = 11.sp,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = { PowerampNotificationListener.openNotificationAccessSettings(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0033)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(text = "Activar", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            } else if (mediaState.title.isBlank() && PowerampNotificationListener.activeController == null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Sin música: abre YouTube Music y pon una canción",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { openYouTubeMusicApp(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0033)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(text = "Abrir", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
             }
         }
