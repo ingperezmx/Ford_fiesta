@@ -1,7 +1,7 @@
 # 🚗 Guía Definitiva de Instalación y Optimización de Pantallas Android con Car Launcher
 ### *Diseñada para cualquier persona (incluso sin conocimientos de programación ni informática)*
 
-> **Versión de esta guía:** corresponde a **Car Launcher 1.0.12** (versionCode 13), el launcher del proyecto PabloCarOS.
+> **Versión de esta guía:** corresponde a **Car Launcher 1.0.13** (versionCode 14), el launcher del proyecto PabloCarOS.
 > El paquete de la app es **`com.x.carlauncher`** (versión de lanzamiento, firmada con la clave propia del proyecto).
 > Si vienes de una versión anterior de esta guía, los comandos ADB y la instalación cambiaron: **ya no se usa el paquete `.debug` ni el APK de depuración**.
 
@@ -23,7 +23,7 @@ Si vas a compilar la app tú mismo desde este repositorio, estas son las version
 
 | Componente | Versión |
 |---|---|
-| Car Launcher | **1.0.12** (versionCode 13) |
+| Car Launcher | **1.0.13** (versionCode 14) |
 | compileSdk / targetSdk | **36** (Android 16) |
 | minSdk | 26 (Android 8.0) |
 | Android Gradle Plugin (AGP) | **8.10.0** |

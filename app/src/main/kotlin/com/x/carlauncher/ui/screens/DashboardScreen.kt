@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -243,12 +244,25 @@ fun DashboardScreen() {
     }
 
     // ─── Root Layout with Dimming factor ──────────────────────────────────────
-    Box(
+    // Tablero adaptable: el diseño se hace a 1024x600 dp y se escala en
+    // proporción a la pantalla real, para que se vea igual (sin nada movido)
+    // en pantallas grandes o chicas. En una pantalla de 1024x600 dp la
+    // escala es 1.0 y no cambia nada.
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(XTheme.colors.background)
             .alpha(dimmingAlpha)
     ) {
+        val uiScale = remember(maxWidth, maxHeight) {
+            minOf(maxWidth / 1024.dp, maxHeight / 600.dp).coerceIn(0.5f, 2.0f)
+        }
+        Box(
+            modifier = Modifier
+                .size(1024.dp, 600.dp)
+                .graphicsLayer(scaleX = uiScale, scaleY = uiScale)
+                .align(Alignment.Center)
+        ) {
         Row(modifier = Modifier.fillMaxSize()) {
 
             // ── Left Navigation Dock (56.dp) ──────────────────────────────────
@@ -508,6 +522,7 @@ fun DashboardScreen() {
                 }
             }
         }
+        } // Cierre del Box adaptable (1024x600 dp escalado)
 
         // ── Full-Screen Native Automotive App Drawer ─────────────────────────
         AppDrawerScreen(

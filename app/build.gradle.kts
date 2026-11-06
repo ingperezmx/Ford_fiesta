@@ -21,8 +21,8 @@ android {
         // (Antes siempre era 1, y con cada cambio de firma habia que
         // desinstalar; con la clave de lanzamiento fijada y este numero
         // subiendo, las proximas actualizaciones se instalan encima.)
-        versionCode = 13
-        versionName = "1.0.12"
+        versionCode = 14
+        versionName = "1.0.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
