@@ -1,11 +1,12 @@
 @echo off
 chcp 65001 >nul
-title PabloCarOS — Paso 2: Instalación y Optimización 60 FPS
+title Car Launcher — Paso 2: Instalación y Optimización 60 FPS
 color 0B
 
 echo ======================================================================
-echo    🚀 PabloCarOS — Instalación y Optimización Extrema
+echo    🚀 Car Launcher — Instalación y Optimización Extrema
 echo    Desarrollado por X
+echo    Versión 1.0.12 (API 36) — paquete com.x.carlauncher
 echo ======================================================================
 echo.
 
@@ -43,21 +44,31 @@ if %errorlevel% neq 0 (
 echo [OK] Pantalla conectada y lista.
 echo.
 
-:: 3. Localizar o compilar el APK
-echo [2/5] Buscando archivo del Launcher (APK)...
-set APK_FILE=app\build\outputs\apk\debug\app-debug.apk
+:: 3. Localizar o compilar el APK de LANZAMIENTO
+:: Se instala la versión de lanzamiento (paquete com.x.carlauncher), firmada
+:: con la clave propia del proyecto: se actualiza encima de la anterior y
+:: Play Protect no la marca como insegura. La versión de depuración
+:: (app-debug.apk / com.x.carlauncher.debug) ya NO se usa.
+echo [2/5] Buscando archivo del Launcher (APK de lanzamiento)...
+set APK_FILE=app\build\outputs\apk\release\app-release.apk
 if not exist "%APK_FILE%" (
-    if exist "app-debug.apk" (
-        set APK_FILE=app-debug.apk
+    if exist "app-release.apk" (
+        set APK_FILE=app-release.apk
     ) else (
-        echo [INFO] Compilando APK por primera vez con Gradle (esto tarda 1 minuto)...
-        call gradlew.bat assembleDebug
+        echo [INFO] No hay APK de lanzamiento. Puedes descargar el APK ya
+        echo [INFO] compilado y firmado desde Releases en GitHub y ponerlo
+        echo [INFO] junto a este archivo con el nombre app-release.apk.
+        echo [INFO] O compilarlo ahora con Gradle (esto tarda unos minutos)...
+        call gradlew.bat assembleRelease
     )
 )
 
 if not exist "%APK_FILE%" (
     color 0C
     echo [ERROR] No se pudo encontrar el archivo instalador APK.
+    echo Descarga el APK de lanzamiento (app-release.apk) desde Releases
+    echo en GitHub y ponlo en esta carpeta, o compílalo con:
+    echo   gradlew.bat assembleRelease
     pause
     exit /b
 )
@@ -78,13 +89,13 @@ echo   -> Reduciendo animaciones a velocidad deportiva (0.5x)...
 %ADB_CMD% -s %IP_RADIO%:5555 shell "settings put global animator_duration_scale 0.5"
 
 echo   -> Blindando contra cierres en segundo plano (Doze Whitelist)...
-%ADB_CMD% -s %IP_RADIO%:5555 shell "dumpsys deviceidle whitelist +com.x.carlauncher.debug" >nul 2>nul
-%ADB_CMD% -s %IP_RADIO%:5555 shell "cmd appops set com.x.carlauncher.debug RUN_IN_BACKGROUND allow" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "dumpsys deviceidle whitelist +com.x.carlauncher" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "cmd appops set com.x.carlauncher RUN_IN_BACKGROUND allow" >nul 2>nul
 echo [OK] Optimizaciones aplicadas exitosamente.
 echo.
 
 :: 5. Instalar la aplicación
-echo [4/5] Transfiriendo e instalando PabloCarOS en tu pantalla...
+echo [4/5] Transfiriendo e instalando Car Launcher en tu pantalla...
 %ADB_CMD% -s %IP_RADIO%:5555 install -r -d "%APK_FILE%"
 if %errorlevel% neq 0 (
     color 0C
@@ -97,30 +108,30 @@ echo.
 
 :: 6. Conceder permisos automáticos
 echo [5/5] Configurando permisos del sistema y fijando launcher...
-%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher.debug android.permission.ACCESS_FINE_LOCATION" >nul 2>nul
-%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher.debug android.permission.ACCESS_COARSE_LOCATION" >nul 2>nul
-%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher.debug android.permission.READ_EXTERNAL_STORAGE" >nul 2>nul
-%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher.debug android.permission.WRITE_EXTERNAL_STORAGE" >nul 2>nul
-%ADB_CMD% -s %IP_RADIO%:5555 shell "appops set com.x.carlauncher.debug SYSTEM_ALERT_WINDOW allow" >nul 2>nul
-%ADB_CMD% -s %IP_RADIO%:5555 shell "cmd notification allow_listener com.x.carlauncher.debug/com.x.carlauncher.media.PowerampNotificationListener" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher android.permission.ACCESS_FINE_LOCATION" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher android.permission.ACCESS_COARSE_LOCATION" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher android.permission.READ_EXTERNAL_STORAGE" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "pm grant com.x.carlauncher android.permission.WRITE_EXTERNAL_STORAGE" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "appops set com.x.carlauncher SYSTEM_ALERT_WINDOW allow" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "cmd notification allow_listener com.x.carlauncher/com.x.carlauncher.media.PowerampNotificationListener" >nul 2>nul
 
 :: Fijar como pantalla de inicio predeterminada
-%ADB_CMD% -s %IP_RADIO%:5555 shell "cmd package set-home-activity com.x.carlauncher.debug/com.x.carlauncher.MainActivity" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "cmd package set-home-activity com.x.carlauncher/com.x.carlauncher.MainActivity" >nul 2>nul
 
 :: Iniciar en la pantalla
-%ADB_CMD% -s %IP_RADIO%:5555 shell "am start -n com.x.carlauncher.debug/com.x.carlauncher.MainActivity" >nul 2>nul
+%ADB_CMD% -s %IP_RADIO%:5555 shell "am start -n com.x.carlauncher/com.x.carlauncher.MainActivity" >nul 2>nul
 
 color 0A
 echo.
 echo ======================================================================
-echo   🎉 ¡FELICITACIONES! PabloCarOS YA ESTÁ ACTIVO EN TU PANTALLA
+echo   🎉 ¡FELICITACIONES! Car Launcher YA ESTÁ ACTIVO EN TU PANTALLA
 echo ======================================================================
 echo.
 echo Mira la pantalla de tu carro:
 echo  1. El sistema arrancará de inmediato a 60 FPS fluidos.
 echo  2. Tienes tu velocímetro GPS y brújula rotatoria hacia el frente.
 echo  3. El reproductor de música leerá tus memorias USB automáticamente.
-echo  4. Para cambiar el saludo "Hola, X", mantén presionado el texto
+echo  4. Para cambiar el saludo "Hola, Pablo", mantén presionado el texto
 echo     durante 1 segundo e ingresa tu propio nombre.
 echo.
 echo Si en el futuro deseas volver al launcher de fábrica, solo haz doble
@@ -132,4 +143,3 @@ echo  Invítame un café para seguir mejorando y actualizando el proyecto:
 echo ----------------------------------------------------------------------
 echo.
 pause
-

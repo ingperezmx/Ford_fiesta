@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title PabloCarOS — Paso 1: Conectar Pantalla por WiFi
+title Car Launcher — Paso 1: Conectar Pantalla por WiFi
 color 0B
 
 echo ======================================================================
-echo    🚗 PabloCarOS — Conexión Fácil a Pantalla Android
+echo    🚗 Car Launcher — Conexión Fácil a Pantalla Android
 echo    Desarrollado por X
 echo ======================================================================
 echo.
@@ -58,7 +58,7 @@ if %errorlevel% equ 0 (
     echo ======================================================================
     echo   ✅ ¡CONEXIÓN EXITOSA!
     echo ======================================================================
-    echo Tu pantalla está lista para recibir PabloCarOS.
+    echo Tu pantalla está lista para recibir Car Launcher.
     echo.
     echo Datos de tu pantalla:
     for /f "delims=" %%i in ('%ADB_CMD% -s %IP_RADIO%:5555 shell getprop ro.product.model') do echo • Modelo: %%i
@@ -67,7 +67,7 @@ if %errorlevel% equ 0 (
     del temp_check.txt >nul 2>nul
     echo.
     echo Ya puedes cerrar esta ventana y ejecutar con doble clic:
-    echo 👉 2_INSTALAR_PabloCarOS.bat
+    echo 👉 2_INSTALAR_PABLOCAROS.bat
     echo.
     pause
     exit /b
@@ -108,4 +108,3 @@ echo.
 echo Consulta la guía completa en INSTALLATION_AND_OPTIMIZATION_GUIDE.md
 del temp_check.txt >nul 2>nul
 pause
-
