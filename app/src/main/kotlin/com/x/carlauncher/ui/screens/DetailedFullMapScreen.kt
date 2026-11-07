@@ -178,6 +178,28 @@ fun DetailedFullMapScreen(
     val isNavigating by CarRouteManager.isNavigating.collectAsState()
     val currentInstruction by CarRouteManager.currentInstruction.collectAsState()
 
+    // Progreso en vivo: distancia y ETA que faltan, calculados desde la
+    // posicion GPS actual (antes el HUD mostraba los totales fijos del
+    // calculo inicial y nunca bajaban). Sin fix de GPS se usan los totales.
+    val liveRemainingMeters = remember(vehicleLoc.latitude, vehicleLoc.longitude, activeRoute) {
+        val route = activeRoute
+        if (route != null && vehicleLoc.hasFix) {
+            CarRouteManager.remainingRoadDistanceMeters(
+                GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude), route
+            )
+        } else null
+    }
+    val liveRemainingEtaSec = remember(vehicleLoc.latitude, vehicleLoc.longitude, activeRoute) {
+        val route = activeRoute
+        if (route != null && vehicleLoc.hasFix) {
+            CarRouteManager.remainingEtaSeconds(
+                GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude), route
+            )
+        } else null
+    }
+    // Velocidad real del GPS (km/h), la misma que muestra el tablero.
+    val liveSpeedKmh = if (vehicleLoc.hasFix) (vehicleLoc.speedMph * 1.60934f) else null
+
     // Screen & Navigation States
     var isCourseUp by remember { mutableStateOf(true) }
     var is3DTilt by remember { mutableStateOf(false) }
@@ -369,10 +391,17 @@ fun DetailedFullMapScreen(
         }
     }
 
-    // Synchronize vehicle marker with live real GPS only
+    // Synchronize vehicle marker with live real GPS only. La polilinea de la
+    // ruta tambien se recorta a lo que falta por recorrer, para que la ruta
+    // avance visualmente mientras el auto se mueve (antes quedaba completa
+    // y la distancia/ETA del HUD nunca bajaban).
     val effectiveCarPos = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-    LaunchedEffect(effectiveCarPos.latitude, effectiveCarPos.longitude) {
+    LaunchedEffect(effectiveCarPos.latitude, effectiveCarPos.longitude, activeRoute) {
         carMarkerRef?.position = effectiveCarPos
+        val route = activeRoute
+        if (route != null && vehicleLoc.hasFix) {
+            routePolylineRef?.setPoints(CarRouteManager.remainingRoadPoints(effectiveCarPos, route))
+        }
         if (isNavigating) {
             mapRef?.controller?.animateTo(effectiveCarPos)
         } else {
@@ -846,44 +875,100 @@ fun DetailedFullMapScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Bottom-Left ETA / Direction Badge (Matching "13.50 min" in sketch)
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF0F172A).copy(alpha = 0.92f),
-                    border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f))
+                // Bottom-Left: Velocidad en vivo + ETA / Distancia restante
+                // (Matching "13.50 min" in sketch). La velocidad es la del
+                // GPS real (km/h); la distancia y el ETA son lo que FALTA,
+                // calculados desde la posicion actual, no los totales fijos.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Velocidad en vivo (GPS real, km/h)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFF0F172A).copy(alpha = 0.92f),
+                        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f))
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF00E5FF).copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Navigation,
-                                contentDescription = null,
-                                tint = Color(0xFF00E5FF),
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF00E5FF).copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = null,
+                                    tint = Color(0xFF00E5FF),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = liveSpeedKmh?.let { "${it.toInt()}" } ?: "—",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "km/h",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF10B981)
+                                )
+                            }
                         }
-                        Column {
-                            Text(
-                                text = activeRoute?.etaMinutesFormatted ?: "—",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
-                            Text(
-                                text = if (activeRoute != null) "${activeRoute!!.distanceKmFormatted} · Ruta Real OSRM" else "Sin ruta · ${(distanceKmTo(selectedDestination.geoPoint)?.let { String.format("%.1f km", it) } ?: "—")}",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF10B981)
-                            )
+                    }
+
+                    // ETA / Distancia restante
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFF0F172A).copy(alpha = 0.92f),
+                        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF00E5FF).copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Navigation,
+                                    contentDescription = null,
+                                    tint = Color(0xFF00E5FF),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = liveRemainingEtaSec?.let { String.format("%.1f min", (it / 60.0).coerceAtLeast(1.0)) }
+                                        ?: activeRoute?.etaMinutesFormatted ?: "—",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = if (activeRoute != null) {
+                                        val km = liveRemainingMeters?.let { it / 1000.0 }
+                                            ?: (activeRoute!!.totalDistanceMeters / 1000.0)
+                                        String.format("%.1f km", km) + " · Ruta Real OSRM"
+                                    } else "Sin ruta · ${(distanceKmTo(selectedDestination.geoPoint)?.let { String.format("%.1f km", it) } ?: "—")}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF10B981)
+                                )
+                            }
                         }
                     }
                 }

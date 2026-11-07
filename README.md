@@ -2,7 +2,7 @@
 
 Launcher automotriz de alto rendimiento y diseño OEM para Ford Fiesta Sedan (2014-2019) y pantallas Android para auto / smartphones Xiaomi. Desarrollado en Kotlin con Jetpack Compose moderno, arquitectura reactiva y soporte dual-bus CAN (HS-CAN y MS-CAN).
 
-**Versión actual: 1.0.14 (versionCode 15) — compileSdk / targetSdk 36 (Android 16), minSdk 26, paquete `com.x.carlauncher`.**
+**Versión actual: 1.0.15 (versionCode 16) — compileSdk / targetSdk 36 (Android 16), minSdk 26, paquete `com.x.carlauncher`.**
 
 > **Solo datos reales.** La app usa únicamente GPS real (FusedLocationProvider), telemetría OBD-II real y rutas reales de OSRM. No hay ubicaciones simuladas, ni RPM simulados, ni rutas inventadas, ni coordenadas de respaldo. Tampoco trae ningún destino personal guardado: los destinos se buscan, no vienen fijos.
 

@@ -385,6 +385,90 @@ object CarRouteManager {
         _currentInstruction.value = "Navegacion finalizada"
     }
 
+    // ── Progreso en vivo por la ruta ──────────────────────────────────────────
+    // La distancia y el ETA del HUD eran los totales fijos del calculo OSRM
+    // inicial y nunca bajaban mientras el auto avanzaba, y la polilinea se
+    // quedaba completa. Estas funciones calculan en vivo, desde la posicion
+    // GPS actual, lo que falta por recorrer siguiendo la ruta.
+
+    private data class NearestOnRoute(val segmentIndex: Int, val closest: GeoPoint, val distanceMeters: Double)
+
+    // Punto de la polilinea mas cercano a la posicion actual (proyeccion
+    // equirectangular local, suficiente a escala de ciudad). Null sin puntos.
+    private fun nearestOnRoute(currentPos: GeoPoint, route: ActiveNavRoute): NearestOnRoute? {
+        val pts = route.roadPoints
+        if (pts.size < 2) return null
+        val lat0 = Math.toRadians(currentPos.latitude)
+        val kx = 111320.0 * Math.cos(lat0)
+        val ky = 110540.0
+        val px = currentPos.longitude * kx
+        val py = currentPos.latitude * ky
+        var best: NearestOnRoute? = null
+        var bestDist = Double.MAX_VALUE
+        for (i in 0 until pts.size - 1) {
+            val a = pts[i]
+            val b = pts[i + 1]
+            val ax = a.longitude * kx
+            val ay = a.latitude * ky
+            val bx = b.longitude * kx
+            val by = b.latitude * ky
+            val dx = bx - ax
+            val dy = by - ay
+            val len2 = dx * dx + dy * dy
+            val t = if (len2 == 0.0) 0.0 else ((px - ax) * dx + (py - ay) * dy) / len2
+            val tc = t.coerceIn(0.0, 1.0)
+            val cx = ax + tc * dx
+            val cy = ay + tc * dy
+            val d = Math.hypot(px - cx, py - cy)
+            if (d < bestDist) {
+                bestDist = d
+                best = NearestOnRoute(i, GeoPoint(cy / ky, cx / kx), d)
+            }
+        }
+        return best
+    }
+
+    // Distancia real restante (metros) por la ruta hasta el destino. Si el
+    // auto esta fuera de la ruta (mas de 150 m de la polilinea), devuelve la
+    // distancia directa al destino en vez de inventar un tramo de ruta.
+    fun remainingRoadDistanceMeters(currentPos: GeoPoint, route: ActiveNavRoute): Double {
+        val pts = route.roadPoints
+        if (pts.isEmpty()) return calculateDistanceMeters(currentPos, route.destinationPoint)
+        val nearest = nearestOnRoute(currentPos, route)
+        if (nearest == null || nearest.distanceMeters > 150.0) {
+            return calculateDistanceMeters(currentPos, route.destinationPoint)
+        }
+        var remaining = calculateDistanceMeters(nearest.closest, pts[nearest.segmentIndex + 1])
+        for (i in nearest.segmentIndex + 1 until pts.size - 1) {
+            remaining += calculateDistanceMeters(pts[i], pts[i + 1])
+        }
+        return remaining
+    }
+
+    // Puntos de la ruta que faltan por recorrer, desde el punto mas cercano
+    // hasta el destino. Sirve para recortar la polilinea mientras se avanza.
+    // Si el auto esta fuera de la ruta, devuelve la ruta completa.
+    fun remainingRoadPoints(currentPos: GeoPoint, route: ActiveNavRoute): List<GeoPoint> {
+        val pts = route.roadPoints
+        if (pts.isEmpty()) return pts
+        val nearest = nearestOnRoute(currentPos, route)
+        if (nearest == null || nearest.distanceMeters > 150.0) return pts
+        val out = ArrayList<GeoPoint>(pts.size - nearest.segmentIndex)
+        out.add(nearest.closest)
+        for (i in nearest.segmentIndex + 1 until pts.size) out.add(pts[i])
+        return out
+    }
+
+    // Tiempo restante estimado (segundos): la duracion OSRM escalada por la
+    // fraccion de ruta que falta. Suave y sin saltos (no depende de la
+    // velocidad instantanea, que en un semaforo es 0).
+    fun remainingEtaSeconds(currentPos: GeoPoint, route: ActiveNavRoute): Double {
+        if (route.totalDistanceMeters <= 0.0) return route.totalDurationSeconds
+        val remaining = remainingRoadDistanceMeters(currentPos, route)
+        val ratio = (remaining / route.totalDistanceMeters).coerceIn(0.0, 1.0)
+        return route.totalDurationSeconds * ratio
+    }
+
     private fun calculateDistanceMeters(p1: GeoPoint, p2: GeoPoint): Double {
         val earthRadius = 6371000.0 // meters
         val dLat = Math.toRadians(p2.latitude - p1.latitude)
