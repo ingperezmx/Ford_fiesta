@@ -246,8 +246,10 @@ fun DashboardScreen() {
     // ─── Root Layout with Dimming factor ──────────────────────────────────────
     // Tablero adaptable: el diseño se hace a 1024x600 dp y se escala en
     // proporción a la pantalla real, para que se vea igual (sin nada movido)
-    // en pantallas grandes o chicas. En una pantalla de 1024x600 dp la
-    // escala es 1.0 y no cambia nada.
+    // en pantallas grandes. En una pantalla de 1024x600 dp la escala es 1.0
+    // y no cambia nada. En pantallas MAS CHICAS (teléfono) la escala nunca
+    // baja de 1.0 y la caja toma el tamaño de la pantalla, así el tablero
+    // llena la pantalla con su diseño flexible original en vez de achicarse.
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -255,11 +257,11 @@ fun DashboardScreen() {
             .alpha(dimmingAlpha)
     ) {
         val uiScale = remember(maxWidth, maxHeight) {
-            minOf(maxWidth / 1024.dp, maxHeight / 600.dp).coerceIn(0.5f, 2.0f)
+            minOf(maxWidth / 1024.dp, maxHeight / 600.dp).coerceIn(1.0f, 2.0f)
         }
         Box(
             modifier = Modifier
-                .size(1024.dp, 600.dp)
+                .size(width = minOf(1024.dp, maxWidth), height = minOf(600.dp, maxHeight))
                 .graphicsLayer(scaleX = uiScale, scaleY = uiScale)
                 .align(Alignment.Center)
         ) {
