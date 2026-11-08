@@ -86,7 +86,8 @@ object RootHelper {
 
     fun execRootInternal(command: String, timeoutMs: Long = 5000L): CommandResult {
         return try {
-            val suBin = SU_PATHS.firstOrNull { File(it).exists() } ?: "su"
+            val suBin = if (cachedRootAvailable == false) null else SU_PATHS.firstOrNull { File(it).exists() }
+            if (suBin == null) return CommandResult(-1, "", "No root binary", false)
             val process = Runtime.getRuntime().exec(suBin)
             val os = DataOutputStream(process.outputStream)
             val stdout = StringBuilder()

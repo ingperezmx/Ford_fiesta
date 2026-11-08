@@ -189,7 +189,7 @@ class AccOffService : Service() {
         // Inicializar supervisor persistente de conexiones Bluetooth (SYNC + SCANNER AUTO)
         VehicleBluetoothSupervisor.initialize(applicationContext)
 
-        com.x.carlauncher.system.RootHelper.execRootInternal("settings put global stay_on_while_plugged_in 0")
+        serviceScope.launch { com.x.carlauncher.system.RootHelper.execRoot("settings put global stay_on_while_plugged_in 0") }
 
         // Verificar estado inicial de energia USB-C
         checkInitialPowerState()
@@ -294,9 +294,9 @@ class AccOffService : Service() {
                 Log.w(TAG, "WakeLock error: ${e.message}")
             }
 
-            com.x.carlauncher.system.RootHelper.execRootInternal("input keyevent 224 ; wm dismiss-keyguard")
+            serviceScope.launch { com.x.carlauncher.system.RootHelper.execRoot("input keyevent 224 ; wm dismiss-keyguard") }
         } else {
-            com.x.carlauncher.system.RootHelper.execRootInternal("wm dismiss-keyguard")
+            serviceScope.launch { com.x.carlauncher.system.RootHelper.execRoot("wm dismiss-keyguard") }
         }
 
         val launchIntent = Intent(applicationContext, MainActivity::class.java).apply {
@@ -390,7 +390,7 @@ class AccOffService : Service() {
             // Apagar fisicamente la pantalla si sigue encendida y no esta cargando
             val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
             if ((pm?.isInteractive == true && !isUsbPowerConnected()) || ignoreHardwareCharging) {
-                com.x.carlauncher.system.RootHelper.execRootInternal("input keyevent 26")
+                com.x.carlauncher.system.RootHelper.execRoot("input keyevent 26")
             }
         }
     }

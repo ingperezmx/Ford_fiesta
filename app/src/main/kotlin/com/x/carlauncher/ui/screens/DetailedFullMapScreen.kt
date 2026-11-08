@@ -289,7 +289,7 @@ fun DetailedFullMapScreen(
 
     LaunchedEffect(Unit) {
         val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-        val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale("es", "MX"))
+        val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale.forLanguageTag("es-MX"))
         while (isActive) {
             val now = Date()
             currentTimeStr = timeFormat.format(now).uppercase()
@@ -348,6 +348,7 @@ fun DetailedFullMapScreen(
                 rotation = 0f
                 setInfoWindow(null)
                 isDraggable = false
+                isEnabled = vehicleLoc.hasFix
             }
             overlays.add(carMarker)
             carMarkerRef = carMarker
@@ -385,12 +386,13 @@ fun DetailedFullMapScreen(
     // y la distancia/ETA del HUD nunca bajaban).
     val effectiveCarPos = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
     LaunchedEffect(effectiveCarPos.latitude, effectiveCarPos.longitude, activeRoute) {
+        carMarkerRef?.isEnabled = vehicleLoc.hasFix
         carMarkerRef?.position = effectiveCarPos
         val route = activeRoute
         if (route != null && vehicleLoc.hasFix) {
             routePolylineRef?.setPoints(CarRouteManager.remainingRoadPoints(effectiveCarPos, route))
         }
-        if (isNavigating) {
+        if (vehicleLoc.hasFix) { mapRef?.controller?.animateTo(effectiveCarPos) } else if (false) {
             mapRef?.controller?.animateTo(effectiveCarPos)
         } else {
             mapRef?.controller?.animateTo(effectiveCarPos)
@@ -726,7 +728,7 @@ fun DetailedFullMapScreen(
             IconButton(
                 onClick = {
                     val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-                    mapRef?.controller?.animateTo(currentGeo)
+                    if (vehicleLoc.hasFix) mapRef?.controller?.animateTo(currentGeo) else Toast.makeText(context, "Esperando señal GPS en vivo...", Toast.LENGTH_SHORT).show()
                     mapRef?.controller?.setZoom(16.0)
                     zoomLevel = 16.0
                 },

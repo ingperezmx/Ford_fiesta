@@ -218,7 +218,9 @@ class BluetoothStateReceiver : BroadcastReceiver() {
 
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
                 Log.d(TAG, "ACL connected: device=$deviceName")
-                emit(BluetoothConnectionState(deviceName, isConnected = true, profile = "NONE"))
+                if (!VehicleBluetoothSupervisor.isScannerAutoDevice(deviceName)) {
+                    emit(BluetoothConnectionState(deviceName, isConnected = true, profile = "NONE"))
+                }
 
                 if (VehicleBluetoothSupervisor.isScannerAutoDevice(deviceName)) {
                     Log.i(TAG, "Escaner automotriz SCANNER AUTO conectado ('$deviceName') -> Abriendo XCarOS")
@@ -506,7 +508,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 if (active != null) {
                     val name = try { active.name ?: active.address } catch (e: Exception) { active.address }
                     if (!name.isNullOrBlank() && name != "Unknown") {
-                        applyConnectedState(name)
+                        if (!VehicleBluetoothSupervisor.isScannerAutoDevice(name)) { applyConnectedState(name); return }
                         return
                     }
                 }
@@ -523,7 +525,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 val isConn = isConnectedMethod.invoke(dev) as? Boolean ?: false
                 if (isConn) {
                     val name = dev.name ?: dev.address ?: "Dispositivo Bluetooth"
-                    applyConnectedState(name)
+                    if (!VehicleBluetoothSupervisor.isScannerAutoDevice(name)) { applyConnectedState(name); return }
                     return
                 }
             }
@@ -543,7 +545,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 if (pState >= 1 && addr.isNotBlank() && addr != "00:00:00:00:00:00") {
                     val dev = try { adapter.getRemoteDevice(addr) } catch (e: Exception) { null }
                     val name = dev?.name ?: adapter.bondedDevices.find { it.address.equals(addr, true) }?.name ?: addr
-                    applyConnectedState(name)
+                    if (!VehicleBluetoothSupervisor.isScannerAutoDevice(name)) { applyConnectedState(name); return }
                     return
                 }
             }

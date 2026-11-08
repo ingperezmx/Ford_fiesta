@@ -113,7 +113,7 @@ object VehicleLocationManager {
         override fun onLocationResult(result: LocationResult) {
             for (loc in result.locations) {
                 if (isLocationMocked(loc)) {
-                    Log.w(TAG, "Ubicación simulada detectada y bloqueada (Fused): Lat: ${loc.latitude}, Lng: ${loc.longitude}")
+                    Log.w(TAG, "Ubicación simulada detectada y bloqueada (Fused)")
                     continue
                 }
                 handleNewLocation(loc, sourceProvider = "fused")
@@ -131,7 +131,7 @@ object VehicleLocationManager {
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(loc: Location) {
             if (isLocationMocked(loc)) {
-                Log.w(TAG, "Ubicación simulada detectada y bloqueada: Lat: ${loc.latitude}, Lng: ${loc.longitude}")
+                Log.w(TAG, "Ubicación simulada detectada y bloqueada")
                 return // Drop fake GPS instantly
             }
             handleNewLocation(loc)
@@ -428,7 +428,10 @@ object VehicleLocationManager {
         watchdogJob?.cancel()
         watchdogJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
-                delay(10000L)
+                delay(15000L)
+                if (isListening && (System.currentTimeMillis() - _locationState.value.timestamp) > 30000L) {
+                    scope.launch(Dispatchers.Main) { startListening() }
+                }
             }
         }
     }

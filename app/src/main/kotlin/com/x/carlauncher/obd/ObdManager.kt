@@ -30,7 +30,7 @@ data class ObdData(
     val coolantTempC: Int = 0,
     val intakeTempC: Int = 0,
     val ambientTempC: Int = 0,
-    val batteryVoltage: Float = 12.6f,
+    val batteryVoltage: Float = 0f,
     val throttlePercent: Int = 0,
     val engineLoadPercent: Int = 0,
     val fuelLevelPercent: Int = 0,

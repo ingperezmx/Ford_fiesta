@@ -313,7 +313,7 @@ class WeatherRepository(private val context: Context) {
             country       = finalCountry,
             temp          = response.main.temp.toInt(),
             feelsLike     = response.main.feelsLike.toInt(),
-            description   = (condition?.description?.replaceFirstChar { it.uppercase() } ?: "Cielo claro").replace("a","a").replace("e","e").replace("i","i").replace("o","o").replace("u","u").replace("A","A").replace("E","E").replace("I","I").replace("O","O").replace("U","U").replace("n","n").replace("N","N"),
+            description   = condition?.description?.replaceFirstChar { it.uppercase() } ?: "Cielo claro",
             iconCode      = condition?.icon ?: "02d",
             humidity      = response.main.humidity,
             windSpeedMph  = response.wind.speed * MPS_TO_MPH,

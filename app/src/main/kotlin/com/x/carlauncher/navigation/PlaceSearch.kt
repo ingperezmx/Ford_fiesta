@@ -54,9 +54,11 @@ object PlaceSearch {
      */
     suspend fun search(query: String): List<PlaceResult> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
+        val loc = com.x.carlauncher.location.VehicleLocationManager.currentLocation
+        val vbox = if (loc.hasFix) "${loc.longitude - 1.5},${loc.latitude - 1.5},${loc.longitude + 1.5},${loc.latitude + 1.5}" else "-118.5,14.5,-86.5,32.8"
         val url = "https://nominatim.openstreetmap.org/search" +
             "?format=json&addressdetails=1&limit=8&accept-language=es" +
-            "&viewbox=-170,-60,-10,85&q=$q"
+            "&viewbox=$vbox&bounded=0&q=$q"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "CarOS Ford Fiesta/1.0.4 (Android)")

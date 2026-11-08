@@ -158,14 +158,14 @@ object CarRouteManager {
     private fun fetchRealRoadRoute(start: GeoPoint, end: GeoPoint, destName: String): ActiveNavRoute? {
         // 1. Primary OSRM Server (HTTP port 80 - now explicitly permitted in network_security_config)
         val route1 = queryOsrmEndpoint(
-            "http://router.project-osrm.org/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true",
+            "https://router.project-osrm.org/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true",
             start, end, destName
         )
         if (route1 != null) return route1
 
         // 2. Secondary OSM Germany Routing Server
         val route2 = queryOsrmEndpoint(
-            "http://routing.openstreetmap.de/routed-car/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true",
+            "https://routing.openstreetmap.de/routed-car/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true",
             start, end, destName
         )
         if (route2 != null) return route2

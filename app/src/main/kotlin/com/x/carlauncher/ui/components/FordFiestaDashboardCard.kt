@@ -310,7 +310,7 @@ fun FordFiestaDashboardCard(
                     )
 
                     // Testigo Bateria
-                    val batteryOk = obdData.batteryVoltage >= 12.2f
+                    val batteryOk = obdData.isConnected && obdData.batteryVoltage >= 12.2f
                     Icon(
                         imageVector = Icons.Default.BatteryChargingFull,
                         contentDescription = "Bateria",
@@ -721,7 +721,7 @@ private fun FiestaCenterLcdDisplay(
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth(0.5f)
+                                .fillMaxWidth(if (obdData.isConnected && obdData.coolantTempC > 0) ((obdData.coolantTempC - 40f) / 80f).coerceIn(0f, 1f) else 0f)
                                 .background(Color(0xFF00E5FF))
                         )
                     }
@@ -744,7 +744,7 @@ private fun FiestaCenterLcdDisplay(
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth(0.75f)
+                                .fillMaxWidth(if (obdData.isConnected && obdData.fuelLevelPercent > 0) (obdData.fuelLevelPercent / 100f).coerceIn(0f, 1f) else 0f)
                                 .background(Color(0xFF10B981))
                         )
                     }

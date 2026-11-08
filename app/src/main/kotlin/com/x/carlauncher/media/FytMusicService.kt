@@ -389,8 +389,8 @@ class FytMusicService : Service() {
         var title = rawTitle.trim()
         var artist = rawArtist.trim()
 
-        val isCorruptedTitle = title.contains("\uFFFD") || title.contains("")
-        val isCorruptedArtist = artist.contains("\uFFFD") || artist.contains("")
+        val isCorruptedTitle = title.contains("\uFFFD")
+        val isCorruptedArtist = artist.contains("\uFFFD")
         val isUnknownTitle = title.isBlank() || isCorruptedTitle || title.equals("Desconocido", ignoreCase = true) || title.equals("Unknown", ignoreCase = true)
         val isUnknownArtist = artist.isBlank() || isCorruptedArtist || artist.equals("Desconocido", ignoreCase = true) || artist.equals("Unknown", ignoreCase = true)
 
@@ -402,10 +402,10 @@ class FytMusicService : Service() {
                 val mmrArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
                 mmr.release()
 
-                if ((isUnknownTitle || isCorruptedTitle) && !mmrTitle.isNullOrBlank() && !mmrTitle.contains("\uFFFD") && !mmrTitle.contains("")) {
+                if ((isUnknownTitle || isCorruptedTitle) && !mmrTitle.isNullOrBlank() && !mmrTitle.contains("\uFFFD")) {
                     title = mmrTitle.trim()
                 }
-                if ((isUnknownArtist || isCorruptedArtist) && !mmrArtist.isNullOrBlank() && !mmrArtist.contains("\uFFFD") && !mmrArtist.contains("")) {
+                if ((isUnknownArtist || isCorruptedArtist) && !mmrArtist.isNullOrBlank() && !mmrArtist.contains("\uFFFD")) {
                     artist = mmrArtist.trim()
                 }
             } catch (_: Exception) {}
@@ -416,12 +416,12 @@ class FytMusicService : Service() {
             val file = File(playPath)
             val name = file.nameWithoutExtension
             if (name.isNotBlank()) {
-                if (title.isBlank() || title.contains("\uFFFD") || title.contains("") || title.equals("Desconocido", ignoreCase = true)) {
+                if (title.isBlank() || title.contains("\uFFFD") || title.equals("Desconocido", ignoreCase = true)) {
                     if (name.contains(" - ")) {
                         val parts = name.split(" - ")
                         if (parts.size >= 2) {
                             title = parts[0].trim()
-                            if (artist.isBlank() || artist.contains("\uFFFD") || artist.contains("") || artist.equals("Desconocido", ignoreCase = true)) {
+                            if (artist.isBlank() || artist.contains("\uFFFD") || artist.equals("Desconocido", ignoreCase = true)) {
                                 artist = parts[1].trim()
                             }
                         } else {

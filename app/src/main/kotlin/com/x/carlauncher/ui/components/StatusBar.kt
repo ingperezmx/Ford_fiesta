@@ -41,7 +41,7 @@ import com.x.carlauncher.ui.theme.XTheme
 fun TopStatusBar(
     currentTime: String,
     currentDate: String,
-    outsideTemp: Int,
+    outsideTemp: Int?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -181,7 +181,7 @@ fun TopStatusBar(
                     modifier           = Modifier.size(20.dp)
                 )
                 Text(
-                    text     = "$outsideTemp C",
+                    text     = if (outsideTemp != null) "$outsideTemp C" else "-- C",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color    = colors.textPrimary

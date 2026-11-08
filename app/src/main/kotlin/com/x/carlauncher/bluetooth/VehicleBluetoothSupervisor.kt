@@ -246,7 +246,7 @@ object VehicleBluetoothSupervisor {
         if (now - lastScannerAttemptTime < SCANNER_INTERVAL_MS) {
             return // No reintentar cada 3.5s; respetar el intervalo de 30 minutos
         }
-        val isObdConnected = ObdManager.obdData.value.isConnected
+        val isObdConnected = ObdManager.obdData.value.let { it.isConnected || it.connectionStatus.contains("Conectando", ignoreCase = true) }
         if (!isObdConnected) {
             lastScannerAttemptTime = now
             Log.i(TAG, "Supervisor 30m: Reintentando conexion a SCANNER AUTO: ${device.name}")

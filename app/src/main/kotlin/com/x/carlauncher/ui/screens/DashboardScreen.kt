@@ -86,7 +86,7 @@ fun DashboardScreen() {
 
     LaunchedEffect(Unit) {
         val timeFmt = SimpleDateFormat("h:mm a", Locale.ENGLISH)
-        val dateFmt = SimpleDateFormat("EEE, d 'de' MMMM", Locale("es", "ES"))
+        val dateFmt = SimpleDateFormat("EEE, d 'de' MMMM", Locale.forLanguageTag("es-MX"))
         while (true) {
             val now = Date()
             currentTime = timeFmt.format(now).uppercase()
@@ -283,7 +283,7 @@ fun DashboardScreen() {
                 TopStatusBar(
                     currentTime = currentTime,
                     currentDate = currentDate,
-                    outsideTemp = weatherData?.temp ?: 17,
+                    outsideTemp = weatherData?.temp,
                     modifier    = Modifier
                         .fillMaxWidth()
                         .height(48.dp)

@@ -364,7 +364,7 @@ fun ExpandedFordFiestaDashboardScreen(
                 }
 
                 // Testigo Bateria 12V
-                val batteryOk = obdData.batteryVoltage >= 12.2f
+                val batteryOk = obdData.isConnected && obdData.batteryVoltage >= 12.2f
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -376,7 +376,7 @@ fun ExpandedFordFiestaDashboardScreen(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "${String.format("%.1f", obdData.batteryVoltage)}V",
+                        text = if (obdData.isConnected && obdData.batteryVoltage > 0f) "${String.format(java.util.Locale.US, "%.1f", obdData.batteryVoltage)}V" else "-- V",
                         fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (batteryOk) Color(0xFF34D399) else Color(0xFFF59E0B)
@@ -849,7 +849,7 @@ private fun FullScreenCenterLcdDisplay(
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth(0.5f)
+                                .fillMaxWidth(if (obdData.isConnected && obdData.coolantTempC > 0) ((obdData.coolantTempC - 40f) / 80f).coerceIn(0f, 1f) else 0f)
                                 .background(Color(0xFF00E5FF))
                         )
                     }
@@ -879,7 +879,7 @@ private fun FullScreenCenterLcdDisplay(
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth(0.75f)
+                                .fillMaxWidth(if (obdData.isConnected && obdData.fuelLevelPercent > 0) (obdData.fuelLevelPercent / 100f).coerceIn(0f, 1f) else 0f)
                                 .background(Color(0xFF10B981))
                         )
                     }

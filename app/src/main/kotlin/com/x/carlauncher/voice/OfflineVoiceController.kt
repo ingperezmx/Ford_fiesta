@@ -334,7 +334,9 @@ class OfflineVoiceController private constructor(private val context: Context) {
                 _assistantFeedback.value = "Buscando lugares cercanos"
                 voiceAssistant.speak("Buscando lugares cercanos en el mapa, Pablo.")
                 try {
-                    val mapSearch = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(raw))).apply {
+                    val loc = com.x.carlauncher.location.VehicleLocationManager.currentLocation
+                    val geoUri = if (loc.hasFix) "geo:${loc.latitude},${loc.longitude}?q=${Uri.encode(raw)}" else "geo:0,0?q=${Uri.encode(raw)}"
+                    val mapSearch = Intent(Intent.ACTION_VIEW, Uri.parse(geoUri)).apply {
                         setPackage("com.google.android.apps.maps")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
@@ -345,6 +347,11 @@ class OfflineVoiceController private constructor(private val context: Context) {
             // ── 10. Reporte del Clima ──────────────────────────────────────────
             text.containsAny("clima", "como esta el clima", "tiempo", "temperatura", "hace calor", "hace frio") -> {
                 val weather = WeatherRepository.latestWeatherData
+                if (weather == null) {
+                    _assistantFeedback.value = "Obteniendo clima por GPS..."
+                    voiceAssistant.speak("Todavia estoy obteniendo los datos del clima de tu ubicacion GPS actual, Pablo.")
+                    return
+                }
                 val temp = weather?.temp ?: 24
                 val desc = weather?.description ?: "cielo despejado"
                 val city = weather?.cityName ?: "tu ubicacion"
@@ -355,6 +362,11 @@ class OfflineVoiceController private constructor(private val context: Context) {
             // ── 11. Ubicacion del Vehiculo ────────────────────────────────────
             text.containsAny("donde estoy", "ubicacion", "donde me encuentro") -> {
                 val weather = WeatherRepository.latestWeatherData
+                if (weather == null) {
+                    _assistantFeedback.value = "Obteniendo clima por GPS..."
+                    voiceAssistant.speak("Todavia estoy obteniendo los datos del clima de tu ubicacion GPS actual, Pablo.")
+                    return
+                }
                 val place = weather?.cityName ?: "tu zona"
                 val muni = weather?.municipality ?: "local"
                 _assistantFeedback.value = "Ubicacion: $place, $muni"
