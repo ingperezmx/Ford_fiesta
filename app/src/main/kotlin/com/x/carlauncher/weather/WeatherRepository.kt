@@ -172,7 +172,7 @@ class WeatherRepository(private val context: Context) {
         private const val TAG = "WeatherRepository"
 
         // â"€â"€â"€ !! Replace with your real OpenWeatherMap API key !! â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        const val API_KEY = "ebed4f78c2bbe6a79ea27f9d1f402f39"
+        const val API_KEY = "" // Leida desde local.properties / recursos (R.string.owm_api_key)
         // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
         private const val BASE_URL = "https://api.openweathermap.org/data/2.5/"
@@ -212,9 +212,11 @@ class WeatherRepository(private val context: Context) {
         }
 
         return try {
-            val response = apiService.getCurrentWeather(lat, lon, API_KEY)
+            val owmKey = try { context.getString(com.x.carlauncher.R.string.owm_api_key) } catch (_: Exception) { "" }.ifBlank { API_KEY }
+            if (owmKey.isBlank()) throw IllegalStateException("Using keyless Open-Meteo")
+            val response = apiService.getCurrentWeather(lat, lon, owmKey)
             val geoItem = try {
-                val geoList = apiService.getReverseGeocode(lat, lon, 1, API_KEY)
+                val geoList = apiService.getReverseGeocode(lat, lon, 1, owmKey)
                 geoList.firstOrNull()
             } catch (e: Exception) {
                 Log.w(TAG, "OWM Reverse geocode failed", e)

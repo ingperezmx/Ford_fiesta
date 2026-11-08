@@ -21,8 +21,24 @@ android {
         // (Antes siempre era 1, y con cada cambio de firma habia que
         // desinstalar; con la clave de lanzamiento fijada y este numero
         // subiendo, las proximas actualizaciones se instalan encima.)
-        versionCode = 16
-        versionName = "1.0.15"
+        versionCode = 18
+        versionName = "1.0.17"
+
+        val localPropsFile = rootProject.file("local.properties")
+        val localProps: Map<String, String> = if (localPropsFile.exists()) {
+            localPropsFile.readLines()
+                .mapNotNull { line ->
+                    val parts = line.split("=", limit = 2)
+                    if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
+                }
+                .toMap()
+        } else {
+            emptyMap()
+        }
+        val mapsApiKey = localProps["MAPS_API_KEY"] ?: System.getenv("MAPS_API_KEY") ?: ""
+        val owmApiKey = localProps["OWM_API_KEY"] ?: System.getenv("OWM_API_KEY") ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        resValue("string", "owm_api_key", owmApiKey)
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

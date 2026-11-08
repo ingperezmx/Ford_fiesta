@@ -99,7 +99,7 @@
         <!-- Clave Oficial de Validación de Google Maps -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyC53rgr57aa3Jd-SoXp1i1PnQWO3SbOEvI" />
+            android:value="${MAPS_API_KEY}" />
 
         <!-- Actividad Principal del Launcher Automotriz -->
         <activity
