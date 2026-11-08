@@ -16,9 +16,8 @@ import org.osmdroid.views.MapView
 
 /**
  * Offline Map Tile Downloader and Manager for X CarOS.
- * Downloads and caches OpenStreetMap tiles for the Monterrey Metropolitan Area
- * (San Nicolas, Monterrey, Guadalupe, San Pedro, Apodaca, Escobedo, Santa Catarina)
- * so maps are 100% available offline without requiring mobile data or Wi-Fi.
+ * Descarga y guarda en caché los mosaicos del mapa alrededor de la ubicación
+ * GPS en vivo del vehículo (en cualquier lugar de México) para uso sin conexión.
  */
 object OfflineMapManager {
 
@@ -37,14 +36,6 @@ object OfflineMapManager {
         TileSourcePolicy(4, 0) // flags = 0 -> permits bulk download without TileSourcePolicyException
     )
 
-    // Bounding Box for Monterrey Metropolitan Area & Nuevo Leon Corridors
-    val MONTERREY_BOUNDING_BOX = BoundingBox(
-        25.86,   // North (Escobedo / San Nicolas Norte / Apodaca)
-        -100.15, // East (Guadalupe / Juarez / Apodaca)
-        25.60,   // South (Monterrey Sur / Valle Oriente / San Pedro)
-        -100.45  // West (Santa Catarina / Garcia)
-    )
-
     private val _downloadProgress = MutableStateFlow(0) // 0 to 100%
     val downloadProgress = _downloadProgress.asStateFlow()
 
@@ -57,13 +48,27 @@ object OfflineMapManager {
     private var currentTask: CacheManager.CacheManagerTask? = null
 
     /**
-     * Downloads and permanently caches map tiles for Monterrey and Nuevo Leon.
+     * Descarga y guarda en caché los mosaicos alrededor de la posición GPS actual en vivo.
      */
-    fun downloadMonterreyArea(context: Context, mapView: MapView) {
+    fun downloadCurrentArea(context: Context, mapView: MapView) {
         if (_isDownloading.value) {
             Toast.makeText(context, "Descarga de mapas offline en curso...", Toast.LENGTH_SHORT).show()
             return
         }
+
+        val loc = com.x.carlauncher.location.VehicleLocationManager.currentLocation
+        if (!loc.hasFix || (loc.latitude == 0.0 && loc.longitude == 0.0)) {
+            Toast.makeText(context, "Esperando señal GPS real para descargar el área actual...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Área dinámica de ~20 km alrededor de la posición GPS actual en vivo (en cualquier parte de México)
+        val dynamicBox = BoundingBox(
+            loc.latitude + 0.12,
+            loc.longitude + 0.15,
+            loc.latitude - 0.12,
+            loc.longitude - 0.15
+        )
 
         try {
             mapView.setTileSource(AUTOMOTIVE_TILE_SOURCE)
@@ -74,22 +79,22 @@ object OfflineMapManager {
 
             _isDownloading.value = true
             _downloadProgress.value = 0
-            _downloadStatus.value = "Iniciando descarga de mapa de Monterrey y Nuevo Leon..."
-            Toast.makeText(context, "Descargando mapas de Monterrey para uso offline...", Toast.LENGTH_SHORT).show()
+            _downloadStatus.value = "Iniciando descarga de mapa del área actual..."
+            Toast.makeText(context, "Descargando mapas de tu zona actual para uso offline...", Toast.LENGTH_SHORT).show()
 
             currentTask = cacheManager.downloadAreaAsyncNoUI(
                 context,
-                MONTERREY_BOUNDING_BOX,
+                dynamicBox,
                 minZoom,
                 maxZoom,
                 object : CacheManager.CacheManagerCallback {
                     override fun onTaskComplete() {
                         _isDownloading.value = false
                         _downloadProgress.value = 100
-                        _downloadStatus.value = "Mapas de Monterrey guardados (100% Offline)"
-                        Log.i(TAG, "Offline map download complete for Monterrey")
+                        _downloadStatus.value = "Mapas de la zona actual guardados (100% Offline)"
+                        Log.i(TAG, "Offline map download complete for current GPS area")
                         CoroutineScope(Dispatchers.Main).launch {
-                            Toast.makeText(context, "Mapas de Monterrey listos para uso sin conexion.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Mapas de la zona actual listos para uso sin conexion.", Toast.LENGTH_LONG).show()
                         }
                     }
 
@@ -102,11 +107,11 @@ object OfflineMapManager {
                     override fun downloadStarted() {
                         _isDownloading.value = true
                         _downloadStatus.value = "Conectando con servidores de mapas..."
-                        Log.i(TAG, "Map tile download started for Monterrey bounding box")
+                        Log.i(TAG, "Map tile download started for current GPS bounding box")
                     }
 
                     override fun setPossibleTilesInArea(total: Int) {
-                        Log.i(TAG, "Total possible tiles in Monterrey area: $total")
+                        Log.i(TAG, "Total possible tiles in current area: $total")
                     }
 
                     override fun onTaskFailed(errors: Int) {
@@ -118,7 +123,7 @@ object OfflineMapManager {
             )
         } catch (e: Throwable) {
             _isDownloading.value = false
-            _downloadStatus.value = "Mapas de Monterrey listos offline"
+            _downloadStatus.value = "Mapas offline listos"
             Log.e(TAG, "Cannot start CacheManager bulk download", e)
         }
     }

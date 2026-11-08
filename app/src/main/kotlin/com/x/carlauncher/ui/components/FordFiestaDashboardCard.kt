@@ -658,15 +658,16 @@ private fun FiestaCenterLcdDisplay(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        val temp = if (obdData.isConnected && obdData.coolantTempC > 0) obdData.coolantTempC else 90
+                        val tempStr = if (obdData.isConnected && obdData.coolantTempC > 0) "${obdData.coolantTempC} C" else "-- C"
                         Text(
-                            text = "TEMP " + temp + " C",
+                            text = "TEMP $tempStr",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF38BDF8)
                         )
+                        val battStr = if (obdData.isConnected && obdData.batteryVoltage > 0f) String.format(java.util.Locale.US, "%.1fV", obdData.batteryVoltage) else "-- V"
                         Text(
-                            text = "BATT " + String.format(java.util.Locale.US, "%.1f", obdData.batteryVoltage) + "V",
+                            text = "BATT $battStr",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFFBBF24)
@@ -679,16 +680,17 @@ private fun FiestaCenterLcdDisplay(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        val fuel = if (obdData.fuelLevelPercent > 0) obdData.fuelLevelPercent else 75
+                        val hasFuel = obdData.isConnected && obdData.fuelLevelPercent > 0
+                        val fuelStr = if (hasFuel) "${obdData.fuelLevelPercent}%" else "--%"
                         Text(
-                            text = "GAS $fuel%",
+                            text = "GAS $fuelStr",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (fuel < 20) Color(0xFFEF4444) else Color(0xFF34D399)
+                            color = if (hasFuel && obdData.fuelLevelPercent < 20) Color(0xFFEF4444) else Color(0xFF34D399)
                         )
-                        val estRng = (fuel * 4.8f).toInt()
+                        val rngStr = if (hasFuel) "${(obdData.fuelLevelPercent * 4.8f).toInt()} mi" else "-- mi"
                         Text(
-                            text = "RNG $estRng mi",
+                            text = "RNG $rngStr",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF94A3B8)

@@ -727,15 +727,16 @@ private fun FullScreenCenterLcdDisplay(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        val temp = if (obdData.isConnected && obdData.coolantTempC > 0) obdData.coolantTempC else 90
+                        val tempStr = if (obdData.isConnected && obdData.coolantTempC > 0) "${obdData.coolantTempC} C" else "-- C"
                         Text(
-                            text = "REFRIGERANTE: $temp C",
+                            text = "REFRIGERANTE: $tempStr",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF38BDF8)
                         )
+                        val battStr = if (obdData.isConnected && obdData.batteryVoltage > 0f) String.format(java.util.Locale.US, "%.1fV", obdData.batteryVoltage) else "-- V"
                         Text(
-                            text = "BATERIA: " + String.format(java.util.Locale.US, "%.1f", obdData.batteryVoltage) + "V",
+                            text = "BATERIA: $battStr",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFBBF24)
@@ -746,8 +747,8 @@ private fun FullScreenCenterLcdDisplay(
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF94A3B8)
                         )
-                        val mapStr = if (obdData.manifoldPressureKpa > 0) "${obdData.manifoldPressureKpa} kPa" else "101 kPa"
-                        val iatStr = if (obdData.intakeTempC != 0) "${obdData.intakeTempC} C" else "24 C"
+                        val mapStr = if (obdData.isConnected && obdData.manifoldPressureKpa > 0) "${obdData.manifoldPressureKpa} kPa" else "-- kPa"
+                        val iatStr = if (obdData.isConnected && obdData.intakeTempC != 0) "${obdData.intakeTempC} C" else "-- C"
                         Text(
                             text = "ADMISION (MAP): $mapStr | AIRE: $iatStr",
                             fontSize = 9.5.sp,
@@ -761,22 +762,23 @@ private fun FullScreenCenterLcdDisplay(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        val fuel = if (obdData.fuelLevelPercent > 0) obdData.fuelLevelPercent else 75
+                        val hasFuel = obdData.isConnected && obdData.fuelLevelPercent > 0
+                        val fuelStr = if (hasFuel) "${obdData.fuelLevelPercent}%" else "--%"
                         Text(
-                            text = "⛽ NIVEL DE TANQUE: $fuel%",
+                            text = "⛽ NIVEL DE TANQUE: $fuelStr",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (fuel < 20) Color(0xFFEF4444) else Color(0xFF34D399)
+                            color = if (hasFuel && obdData.fuelLevelPercent < 20) Color(0xFFEF4444) else Color(0xFF34D399)
                         )
-                        val estimatedMiles = (fuel * 4.8f).toInt()
+                        val estimatedMilesStr = if (hasFuel) "~${(obdData.fuelLevelPercent * 4.8f).toInt()} mi" else "-- mi"
                         Text(
-                            text = "AUTONOMIA ESTIMADA: ~$estimatedMiles mi",
+                            text = "AUTONOMIA ESTIMADA: $estimatedMilesStr",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF94A3B8)
                         )
                         Text(
-                            text = "CONSUMO PROMEDIO: 32.4 MPG",
+                            text = if (obdData.isConnected) "TELEMETRIA OBD-II EN VIVO" else "CONECTA OBD-II PARA DATOS DE TANQUE",
                             fontSize = 11.sp,
                             color = Color(0xFF38BDF8)
                         )
@@ -795,7 +797,7 @@ private fun FullScreenCenterLcdDisplay(
                                 fontWeight = FontWeight.Black,
                                 color = Color(0xFFEF4444)
                             )
-                            val codesStr = if (obdData.dtcCodes.isNotEmpty()) obdData.dtcCodes.joinToString(", ") else "P0100 (Revisar PCM)"
+                            val codesStr = if (obdData.dtcCodes.isNotEmpty()) obdData.dtcCodes.joinToString(", ") else "Revisar PCM"
                             Text(
                                 text = "CODIGOS: $codesStr",
                                 fontSize = 11.sp,
@@ -804,20 +806,20 @@ private fun FullScreenCenterLcdDisplay(
                             )
                         } else {
                             Text(
-                                text = "CHECK ENGINE: OK",
+                                text = if (obdData.isConnected) "CHECK ENGINE: OK" else "CHECK ENGINE: SIN OBD",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
-                                color = Color(0xFF10B981)
+                                color = if (obdData.isConnected) Color(0xFF10B981) else Color(0xFF94A3B8)
                             )
                             Text(
-                                text = if (obdData.isVlinkerFd) "vLinker FD: HS-CAN + MS-CAN OK" else "SIN CODIGOS DE FALLA ACTIVOS",
+                                text = if (obdData.isVlinkerFd) "vLinker FD: HS-CAN + MS-CAN OK" else if (obdData.isConnected) "SIN CODIGOS DE FALLA ACTIVOS" else "ESPERANDO ADAPTADOR OBD-II",
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF94A3B8)
                             )
                         }
                         Text(
-                            text = if (obdData.isConnected) "ENLACE: ${obdData.deviceName}" else "ODOMETRO: 84,215 mi",
+                            text = if (obdData.isConnected) "ENLACE: ${obdData.deviceName}" else "ENLACE OBD-II DESCONECTADO",
                             fontSize = 10.sp,
                             color = Color(0xFF64748B)
                         )

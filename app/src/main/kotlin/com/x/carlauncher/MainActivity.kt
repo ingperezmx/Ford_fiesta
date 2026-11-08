@@ -117,9 +117,10 @@ class MainActivity : ComponentActivity() {
                 // Nada más que pedir: el GPS ya puede seguir en segundo plano.
             }
         }
-        // Arrancar (o rearrancar) la ubicación real ahora que hay permisos.
+        // Arrancar (o rearrancar) la ubicación real y contactos ahora que hay permisos.
         try {
             com.x.carlauncher.location.VehicleLocationManager.startListening()
+            com.x.carlauncher.contacts.ContactsRepository.loadContacts(applicationContext)
         } catch (e: Exception) {
             android.util.Log.w("MainActivity", "No se pudo arrancar el GPS real", e)
         }
@@ -213,9 +214,6 @@ class MainActivity : ComponentActivity() {
 
         // Voice Assistant: Welcome X with warm Colombian female voice on startup (strictly once per ignition session)
         CarVoiceAssistant.getInstance(applicationContext).onVehicleStartupOrWake()
-
-        // Schedule silent background offline map updates on Wi-Fi
-        com.x.carlauncher.navigation.MapDownloadWorker.schedule(applicationContext)
 
         // Pre-warm App Drawer cache in background for 0ms instant display
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -473,6 +471,32 @@ class MainActivity : ComponentActivity() {
             action == Intent.ACTION_VOICE_COMMAND ||
             action == "android.intent.action.VOICE_COMMAND") {
             com.x.carlauncher.voice.OfflineVoiceController.getInstance(applicationContext).startListening()
+        } else if (action == "com.x.carlauncher.ACTION_PIN_SHORTCUT") {
+            requestPinHomeShortcut()
+        }
+    }
+
+    fun requestPinHomeShortcut() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val sm = getSystemService(android.content.pm.ShortcutManager::class.java)
+                if (sm != null && sm.isRequestPinShortcutSupported) {
+                    val launchIntent = Intent(this, MainActivity::class.java).apply {
+                        action = Intent.ACTION_MAIN
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    }
+                    val pinShortcutInfo = android.content.pm.ShortcutInfo.Builder(this, "car_launcher_main_shortcut")
+                        .setShortLabel("Car Launcher")
+                        .setLongLabel("Car Launcher Ford Fiesta")
+                        .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.mipmap.ic_launcher))
+                        .setIntent(launchIntent)
+                        .build()
+                    sm.requestPinShortcut(pinShortcutInfo, null)
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Could not pin shortcut", e)
+            }
         }
     }
 

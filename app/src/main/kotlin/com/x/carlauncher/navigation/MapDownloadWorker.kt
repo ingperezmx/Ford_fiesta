@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Background worker that automatically and silently downloads / updates
- * the offline Honduras OpenStreetMap sqlite archive (`honduras.sqlite`)
+ * the offline Mexico OpenStreetMap sqlite archive (`mexico.sqlite`)
  * strictly over unmetered Wi-Fi connections.
  */
 class MapDownloadWorker(
@@ -27,10 +27,10 @@ class MapDownloadWorker(
 
     companion object {
         private const val TAG = "MapDownloadWorker"
-        const val WORK_NAME = "monterrey_map_download_worker"
+        const val WORK_NAME = "mexico_map_download_worker"
 
-        // Direct URL for Monterrey / Nuevo Leon offline OSM SQLite package
-        const val DEFAULT_MAP_URL = "https://raw.githubusercontent.com/x-automotive/assets/main/maps/monterrey_nuevoleon.sqlite"
+        // Direct URL for Mexico offline OSM package
+        const val DEFAULT_MAP_URL = "https://download.geofabrik.de/north-america/mexico-latest.osm.pbf"
         private const val BACKUP_MAP_URL = "https://download.geofabrik.de/north-america/mexico-latest.osm.pbf"
 
         private val _mapUpdateEvent = MutableStateFlow(0L)
@@ -82,11 +82,11 @@ class MapDownloadWorker(
         }
 
         fun getTargetFile(): File {
-            return File(getOsmdroidDir(), "monterrey_nuevoleon.sqlite")
+            return File(getOsmdroidDir(), "mexico_offline.sqlite")
         }
 
         fun getTempFile(): File {
-            return File(getOsmdroidDir(), "monterrey_temp.sqlite")
+            return File(getOsmdroidDir(), "mexico_temp.sqlite")
         }
     }
 
@@ -113,11 +113,11 @@ class MapDownloadWorker(
             // Verify if local file is already up to date
             if (targetFile.exists() && targetFile.length() > 0) {
                 if (remoteLength > 0 && targetFile.length() == remoteLength) {
-                    Log.i(TAG, "Local honduras.sqlite is already up-to-date (${targetFile.length()} bytes)")
+                    Log.i(TAG, "Local mexico_offline.sqlite is already up-to-date (${targetFile.length()} bytes)")
                     return@withContext Result.success()
                 }
                 if (remoteLastModified > 0 && targetFile.lastModified() >= remoteLastModified) {
-                    Log.i(TAG, "Local honduras.sqlite has matching or newer timestamp")
+                    Log.i(TAG, "Local mexico_offline.sqlite has matching or newer timestamp")
                     return@withContext Result.success()
                 }
             }
@@ -179,7 +179,7 @@ class MapDownloadWorker(
                     if (remoteLastModified > 0) {
                         targetFile.setLastModified(remoteLastModified)
                     }
-                    Log.i(TAG, "Honduras map sqlite archive successfully installed: ${targetFile.absolutePath}")
+                    Log.i(TAG, "Mexico map sqlite archive successfully installed: ${targetFile.absolutePath}")
                     // Notify active MapView to refresh tiles
                     _mapUpdateEvent.value = System.currentTimeMillis()
                     return@withContext Result.success()
@@ -193,7 +193,7 @@ class MapDownloadWorker(
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error downloading map of Honduras", e)
+            Log.e(TAG, "Error downloading map of Mexico", e)
             if (tempFile.exists()) tempFile.delete()
             return@withContext Result.retry()
         }

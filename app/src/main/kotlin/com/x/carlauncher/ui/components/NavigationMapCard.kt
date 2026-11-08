@@ -1,10 +1,13 @@
 package com.x.carlauncher.ui.components
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,34 +71,50 @@ fun NavigationMapCard(
         LatLng(vehicleLoc.latitude, vehicleLoc.longitude)
     }
 
-    // Configuración de la Cámara de Google Maps
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(currentLatLng, 16f)
+    val hasLocPerm = remember(vehicleLoc.hasFix) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Seguir la ubicación real y aplicar rumbo del compás
-    LaunchedEffect(currentLatLng, compassHeading, isCourseUp) {
-        val bearingRotation = if (isCourseUp) compassHeading else 0f
-        cameraPositionState.animate(
-            com.google.android.gms.maps.CameraUpdateFactory.newCameraPosition(
-                CameraPosition.builder()
-                    .target(currentLatLng)
-                    .zoom(16f)
-                    .bearing(bearingRotation)
-                    .tilt(if (isCourseUp) 45f else 0f)
-                    .build()
-            ),
-            1000
-        )
+    // Redondear rumbo a escalones de 5 grados para evitar cancelar la animación de Google Maps a 50Hz
+    val stabilizedHeading = remember(compassHeading) {
+        (kotlin.math.round(compassHeading / 5f) * 5f) % 360f
+    }
+
+    // Configuración de la Cámara de Google Maps
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(currentLatLng, if (vehicleLoc.hasFix) 16.5f else 3f)
+    }
+
+    // Seguir la ubicación real y aplicar rumbo del compás de forma fluida
+    LaunchedEffect(currentLatLng, stabilizedHeading, isCourseUp, vehicleLoc.hasFix) {
+        if (vehicleLoc.latitude == 0.0 && vehicleLoc.longitude == 0.0) return@LaunchedEffect
+        val bearingRotation = if (isCourseUp) stabilizedHeading else 0f
+        try {
+            cameraPositionState.animate(
+                com.google.android.gms.maps.CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.builder()
+                        .target(currentLatLng)
+                        .zoom(16.5f)
+                        .bearing(bearingRotation)
+                        .tilt(if (isCourseUp) 45f else 0f)
+                        .build()
+                ),
+                350
+            )
+        } catch (_: Exception) {}
     }
 
     LaunchedEffect(recenterCounter) {
-        if (recenterCounter > 0) {
-            cameraPositionState.animate(
-                com.google.android.gms.maps.CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.fromLatLngZoom(currentLatLng, 16.5f)
+        if (recenterCounter > 0 && (vehicleLoc.latitude != 0.0 || vehicleLoc.longitude != 0.0)) {
+            try {
+                cameraPositionState.animate(
+                    com.google.android.gms.maps.CameraUpdateFactory.newCameraPosition(
+                        CameraPosition.fromLatLngZoom(currentLatLng, 16.5f)
+                    ),
+                    350
                 )
-            )
+            } catch (_: Exception) {}
         }
     }
 
@@ -112,7 +131,7 @@ fun NavigationMapCard(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
                 properties = MapProperties(
-                    isMyLocationEnabled = vehicleLoc.hasFix,
+                    isMyLocationEnabled = vehicleLoc.hasFix && hasLocPerm,
                     mapType = MapType.NORMAL
                 ),
                 uiSettings = MapUiSettings(

@@ -58,23 +58,17 @@ data class VehicleLocation(
  * Wi-Fi + red móvil, con la mejor precisión disponible). Como respaldo
  * se mantienen los proveedores del sistema (GPS, red y pasivo).
  *
+ * - PRIVACIDAD Y SEGURIDAD TOTAL: Jamás se guardan coordenadas en disco,
+ *   caché ni SharedPreferences. Cada sesión inicia en (0.0, 0.0) con
+ *   hasFix = false y obtiene la posición exclusivamente en vivo del
+ *   GPS real en cualquier parte de México o del mundo.
  * - Solo se aceptan fixes de hardware real. Cualquier ubicación
  *   simulada / mock (Fake GPS) se descarta de inmediato.
- * - Sin coordenadas por defecto ni ubicaciones inventadas: sin fix,
- *   la ubicación es (0.0, 0.0) con hasFix = false y la app lo muestra
- *   como "Buscando satélites...", nunca como una posición falsa.
- * - Filtro Kalman para suavizar la velocidad en el auto.
- * - Reconexión automática si el GPS se apaga o se pierde la señal.
  */
 object VehicleLocationManager {
 
     private const val TAG = "VehicleLocationManager"
     private const val PREFS_NAME = "x_vehicle_location_prefs"
-    private const val KEY_LAST_LAT = "last_latitude"
-    private const val KEY_LAST_LNG = "last_longitude"
-    private const val KEY_LAST_BEARING = "last_bearing"
-    private const val KEY_LAST_ALT = "last_altitude"
-    private const val KEY_LAST_ACCURACY = "last_accuracy"
 
     private const val MPS_TO_MPH = 2.23694f
     private const val KALMAN_Q = 0.1f
@@ -87,7 +81,6 @@ object VehicleLocationManager {
     private var reconnectionJob: Job? = null
 
     private var appContext: Context? = null
-    private var prefs: SharedPreferences? = null
     private var locationManager: LocationManager? = null
     private var fusedClient: FusedLocationProviderClient? = null
 
@@ -178,12 +171,15 @@ object VehicleLocationManager {
         if (appContext != null) return
         val app = context.applicationContext
         appContext = app
-        prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // Limpiar cualquier rastro de ubicación guardada en versiones anteriores por privacidad
+        try {
+            app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
+        } catch (_: Exception) {}
         locationManager = app.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         fusedClient = LocationServices.getFusedLocationProviderClient(app)
 
-        // 1. Restore persistent last known valid location from physical history (if available)
-        restoreSavedLocation()
+        // 1. Inicializar en 0.0 (sin coordenadas fijas ni guardadas) y consultar solo el GPS en vivo
+        initLiveLocationOnly()
 
         // 2. Start unified location listening (Google Fused + GPS del sistema)
         startListening()
@@ -201,18 +197,14 @@ object VehicleLocationManager {
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun restoreSavedLocation() {
-        val sp = prefs
-        val savedLatStr = sp?.getString(KEY_LAST_LAT, null)
-        val savedLngStr = sp?.getString(KEY_LAST_LNG, null)
-
-        val savedBearing = sp?.getFloat(KEY_LAST_BEARING, 0f) ?: 0f
-        val savedAlt = sp?.getString(KEY_LAST_ALT, "0.0")?.toDoubleOrNull() ?: 0.0
-        val savedAcc = sp?.getFloat(KEY_LAST_ACCURACY, 0f) ?: 0f
-
-        lastValidBearing = savedBearing
-
-        // Try to query system lastKnownLocation immediately
+    private fun initLiveLocationOnly() {
+        _locationState.value = VehicleLocation(
+            latitude = 0.0,
+            longitude = 0.0,
+            hasFix = false,
+            provider = "searching"
+        )
+        // Consultar si el hardware GPS del sistema tiene un fix en vivo en este instante
         val lm = locationManager
         var bestLoc: Location? = null
         if (lm != null && hasLocationPermission()) {
@@ -237,35 +229,7 @@ object VehicleLocationManager {
 
         if (bestLoc != null && bestLoc.latitude != 0.0 && bestLoc.longitude != 0.0) {
             handleNewLocation(bestLoc)
-        } else if (savedLatStr != null && savedLngStr != null) {
-            val savedLat = savedLatStr.toDoubleOrNull() ?: 0.0
-            val savedLng = savedLngStr.toDoubleOrNull() ?: 0.0
-
-            if (savedLat != 0.0 && savedLng != 0.0) {
-                _locationState.value = VehicleLocation(
-                    latitude = savedLat,
-                    longitude = savedLng,
-                    altitude = savedAlt,
-                    bearing = savedBearing,
-                    speedMph = 0f,
-                    accuracyMeters = savedAcc,
-                    satellites = 0,
-                    hasFix = true,
-                    provider = "cache"
-                )
-                Log.i(TAG, "Restored vehicle location from storage cache: ($savedLat, $savedLng)")
-                return
-            }
         }
-
-        // If no cache or previous physical fix is found, set fields to 0 and wait for hardware
-        _locationState.value = VehicleLocation(
-            latitude = 0.0,
-            longitude = 0.0,
-            hasFix = false,
-            provider = "searching"
-        )
-        Log.i(TAG, "No valid historical hardware location found. System initialized to 0.0. Waiting for real GPS fix...")
     }
 
     @SuppressLint("MissingPermission")
@@ -452,19 +416,7 @@ object VehicleLocationManager {
             timestamp = loc.time
         )
         _locationState.value = newState
-
-        // Guardar el último fix real para el próximo arranque
-        try {
-            prefs?.edit()
-                ?.putString(KEY_LAST_LAT, loc.latitude.toString())
-                ?.putString(KEY_LAST_LNG, loc.longitude.toString())
-                ?.putFloat(KEY_LAST_BEARING, bearing)
-                ?.putString(KEY_LAST_ALT, newState.altitude.toString())
-                ?.putFloat(KEY_LAST_ACCURACY, newState.accuracyMeters)
-                ?.apply()
-        } catch (_: Exception) {}
-
-        Log.d(TAG, "Real GPS fix ($provider): ${loc.latitude}, ${loc.longitude} - ${speedMph.toInt()} mph, ${newState.accuracyMeters.toInt()}m, ${currentSatellites} sats")
+        // Por seguridad y privacidad del usuario: jamás se guardan las coordenadas en disco ni en logs.
     }
 
     fun updateCompassBearing(bearing: Float) {

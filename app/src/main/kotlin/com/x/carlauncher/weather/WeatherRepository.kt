@@ -47,18 +47,18 @@ private val Context.weatherDataStore: DataStore<Preferences> by preferencesDataS
  * Wind speed is converted from m/s to mph before storage here.
  */
 data class WeatherData(
-    val cityName: String? = "Yarumela",
-    val municipality: String? = "La Paz",
-    val department: String? = "La Paz",
-    val country: String? = "HN",
-    val temp: Int = 24,
-    val feelsLike: Int = 24,
-    val description: String? = "Cielo claro",
+    val cityName: String? = "Ubicacion actual",
+    val municipality: String? = "",
+    val department: String? = "",
+    val country: String? = "",
+    val temp: Int = 0,
+    val feelsLike: Int = 0,
+    val description: String? = "",
     val iconCode: String? = "02d",
-    val humidity: Int = 50,
-    val windSpeedMph: Double = 5.0,
-    val tempMax: Int = 28,
-    val tempMin: Int = 20,
+    val humidity: Int = 0,
+    val windSpeedMph: Double = 0.0,
+    val tempMax: Int = 0,
+    val tempMin: Int = 0,
     val pressureHpa: Int = 1013,
     val cloudsPercent: Int = 0,
     val lastUpdatedTime: String? = ""
@@ -203,16 +203,12 @@ class WeatherRepository(private val context: Context) {
     // â"€â"€ Public API â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     /**
-     * Fetches current weather for the given coordinates.
-     * On success, the result is persisted to DataStore and returned.
-     * On failure, the last cached [WeatherData] is returned (if any).
-     *
-     * @return [WeatherData] on success or from cache; `null` if both fail.
+     * Fetches current weather for the given coordinates in real time.
+     * Por seguridad y privacidad: no se guarda ni lee ninguna ciudad ni coordenada en disco/caché.
      */
     suspend fun getWeather(lat: Double, lon: Double): WeatherData? {
         if (!NetworkUtils.isOnline(context)) {
-            Log.d(TAG, "Offline mode active: loading cached weather data immediately (0ms network)")
-            return loadCachedWeatherData()
+            return latestWeatherData
         }
 
         return try {
@@ -225,8 +221,7 @@ class WeatherRepository(private val context: Context) {
                 null
             }
             val weatherData = mapResponseToWeatherData(response, geoItem, lat, lon)
-            cacheWeatherData(weatherData)
-            Log.d(TAG, "Weather fetched successfully for ($lat, $lon): ${weatherData.cityName}, ${weatherData.department}")
+            latestWeatherData = weatherData
             weatherData
         } catch (owmError: Exception) {
             Log.w(TAG, "OWM request failed ($owmError) - using keyless Open-Meteo fallback...")
@@ -235,36 +230,26 @@ class WeatherRepository(private val context: Context) {
                 val curr = openMeteo.current
                 if (curr != null) {
                     val weatherData = mapOpenMeteoToWeatherData(curr, lat, lon)
-                    cacheWeatherData(weatherData)
-                    Log.d(TAG, "Weather fetched successfully via Open-Meteo (keyless fallback): ${weatherData.cityName}")
+                    latestWeatherData = weatherData
                     weatherData
                 } else {
-                    loadCachedWeatherData()
+                    latestWeatherData
                 }
             } catch (fallbackError: Exception) {
-                Log.e(TAG, "Both weather APIs failed - loading from cache", fallbackError)
-                loadCachedWeatherData()
+                Log.e(TAG, "Both weather APIs failed", fallbackError)
+                latestWeatherData
             }
         }
     }
 
     /**
-     * Loads the last successfully cached [WeatherData] from DataStore.
-     * Returns `null` if the cache is empty or the data is malformed.
+     * Limpia cualquier caché previa de ubicación/clima en disco por privacidad.
      */
     suspend fun loadCachedWeatherData(): WeatherData? {
-        return try {
-            val prefs = context.weatherDataStore.data.firstOrNull() ?: return null
-            val json = prefs[PREF_CACHED_WEATHER] ?: return null
-            val cached = gson.fromJson(json, WeatherData::class.java)
-            if (cached != null) {
-                latestWeatherData = cached
-            }
-            cached
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load cached weather data", e)
-            null
-        }
+        try {
+            context.weatherDataStore.edit { it.clear() }
+        } catch (_: Exception) {}
+        return null
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -283,7 +268,7 @@ class WeatherRepository(private val context: Context) {
         var geocoderDept: String? = null
         try {
             if (Geocoder.isPresent()) {
-                val geocoder = Geocoder(context, Locale("es", "HN"))
+                val geocoder = Geocoder(context, Locale.getDefault())
                 val addresses = geocoder.getFromLocation(lat, lon, 1)
                 if (!addresses.isNullOrEmpty()) {
                     val addr = addresses[0]
@@ -300,7 +285,7 @@ class WeatherRepository(private val context: Context) {
             else -> geocoderPlace
         }
 
-        val cleanDept = (geocoderDept?.ifBlank { null } ?: geoItem?.state?.ifBlank { null } ?: "La Paz")
+        val cleanDept = (geocoderDept?.ifBlank { null } ?: geoItem?.state?.ifBlank { null } ?: "")
             .replace(" Department", "", ignoreCase = true)
             .replace("Departamento de ", "", ignoreCase = true)
             .trim()
@@ -308,17 +293,18 @@ class WeatherRepository(private val context: Context) {
         val finalCity = geocoderValidPlace
             ?: response.cityName.ifBlank { null }
             ?: geoItem?.name?.ifBlank { null }
-            ?: "Yarumela"
+            ?: geocoderMuni?.ifBlank { null }
+            ?: "Ubicacion actual"
 
         val finalMuni = geocoderMuni?.ifBlank { null }
             ?: geoItem?.name?.ifBlank { null }
-            ?: "La Paz"
+            ?: finalCity
 
         val finalDept = cleanDept
 
         val finalCountry = response.sys?.country?.ifBlank { null }
             ?: geoItem?.country?.ifBlank { null }
-            ?: "HN"
+            ?: ""
 
         return WeatherData(
             cityName      = finalCity,
@@ -441,7 +427,7 @@ class WeatherViewModel(private val application: Application) : AndroidViewModel(
             } catch (e: Exception) {
                 Log.w(TAG, "Cannot read location for weather", e)
             }
-            return Pair(14.3385, -87.6445) // Real vehicle location (Yarumela, La Paz)
+            return Pair(0.0, 0.0)
         }
     }
 
@@ -453,6 +439,8 @@ class WeatherViewModel(private val application: Application) : AndroidViewModel(
     val weatherState: StateFlow<WeatherData?> = _weatherState.asStateFlow()
 
     private var autoRefreshActive = false
+    private var lastFetchedLat = 0.0
+    private var lastFetchedLon = 0.0
 
     // ── Init - load cache immediately ──────────────────────────────────────────
 
@@ -474,10 +462,24 @@ class WeatherViewModel(private val application: Application) : AndroidViewModel(
 
     init {
         viewModelScope.launch {
-            val cached = repository.loadCachedWeatherData()
-            if (cached != null) {
-                _weatherState.value = cached
-                Log.d(TAG, "Loaded cached weather on init")
+            repository.loadCachedWeatherData()
+        }
+
+        // Escuchar los cambios del GPS real para actualizar el clima en cuanto llegue el primer fix real
+        viewModelScope.launch {
+            com.x.carlauncher.location.VehicleLocationManager.locationState.collect { loc ->
+                if (loc.hasFix && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                    val movedSignificantly = kotlin.math.abs(loc.latitude - lastFetchedLat) > 0.02 ||
+                        kotlin.math.abs(loc.longitude - lastFetchedLon) > 0.02
+                    if (_weatherState.value == null || lastFetchedLat == 0.0 || movedSignificantly) {
+                        lastFetchedLat = loc.latitude
+                        lastFetchedLon = loc.longitude
+                        val data = repository.getWeather(loc.latitude, loc.longitude)
+                        if (data != null) {
+                            _weatherState.value = data
+                        }
+                    }
+                }
             }
         }
 
@@ -486,7 +488,11 @@ class WeatherViewModel(private val application: Application) : AndroidViewModel(
             addAction(com.x.carlauncher.services.AccOffService.ACTION_ACC_ON)
         }
         try {
-            application.registerReceiver(accReceiver, filter)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                application.registerReceiver(accReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                application.registerReceiver(accReceiver, filter)
+            }
         } catch (_: Exception) {}
     }
 
@@ -502,6 +508,9 @@ class WeatherViewModel(private val application: Application) : AndroidViewModel(
             } else {
                 getVehicleCoordinates(application.applicationContext)
             }
+            if (coords.first == 0.0 && coords.second == 0.0) return@launch
+            lastFetchedLat = coords.first
+            lastFetchedLon = coords.second
             val data = repository.getWeather(coords.first, coords.second)
             if (data != null) {
                 _weatherState.value = data
@@ -512,17 +521,20 @@ class WeatherViewModel(private val application: Application) : AndroidViewModel(
     /**
      * Start the 10-minute auto-refresh loop referencing real-time vehicle GPS coordinates.
      */
-    fun startAutoRefresh(lat: Double = 14.3385, lon: Double = -87.6445) {
+    fun startAutoRefresh(lat: Double = 0.0, lon: Double = 0.0) {
         if (autoRefreshActive) return
         autoRefreshActive = true
 
         viewModelScope.launch {
             while (autoRefreshActive) {
                 val (currentLat, currentLon) = getVehicleCoordinates(application.applicationContext)
-                Log.d(TAG, "Auto-refreshing real-time weather (every 10 min) for ($currentLat, $currentLon)")
-                val data = repository.getWeather(currentLat, currentLon)
-                if (data != null) {
-                    _weatherState.value = data
+                if (currentLat != 0.0 && currentLon != 0.0) {
+                    lastFetchedLat = currentLat
+                    lastFetchedLon = currentLon
+                    val data = repository.getWeather(currentLat, currentLon)
+                    if (data != null) {
+                        _weatherState.value = data
+                    }
                 }
                 delay(REFRESH_INTERVAL_MS)
             }

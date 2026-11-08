@@ -90,51 +90,18 @@ object PlaceSearch {
         }
     }
 
-    /** Ultimas busquedas elegidas, mas reciente primero (max 5). */
+    /** Ultimas busquedas elegidas: por seguridad y privacidad no se guardan ubicaciones en disco. */
     fun getRecent(context: Context): List<PlaceResult> {
-        return try {
-            val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(KEY_RECENTS, null) ?: return emptyList()
-            val arr = JSONArray(raw)
-            val out = mutableListOf<PlaceResult>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                out.add(
-                    PlaceResult(
-                        name = obj.optString("name", ""),
-                        address = obj.optString("address", ""),
-                        latitude = obj.optDouble("lat", 0.0),
-                        longitude = obj.optDouble("lon", 0.0)
-                    )
-                )
-            }
-            out.filter { it.name.isNotBlank() }
-        } catch (_: Exception) {
-            emptyList()
-        }
+        try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        } catch (_: Exception) {}
+        return emptyList()
     }
 
-    /** Guarda un lugar al inicio de recientes (sin duplicados). */
+    /** Por seguridad del usuario no se almacenan historiales de ubicaciones/destinos en el dispositivo. */
     fun saveRecent(context: Context, place: PlaceResult) {
         try {
-            val current = getRecent(context)
-                .filterNot { it.name == place.name && it.latitude == place.latitude && it.longitude == place.longitude }
-                .toMutableList()
-            current.add(0, place)
-            val arr = JSONArray()
-            current.take(MAX_RECENTS).forEach { p ->
-                arr.put(
-                    JSONObject().apply {
-                        put("name", p.name)
-                        put("address", p.address)
-                        put("lat", p.latitude)
-                        put("lon", p.longitude)
-                    }
-                )
-            }
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(KEY_RECENTS, arr.toString()).apply()
-        } catch (_: Exception) {
-        }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        } catch (_: Exception) {}
     }
 }

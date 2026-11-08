@@ -580,7 +580,11 @@ class FytMusicService : Service() {
                 addAction(ACTION_FYT_LAUNCHER_MUSIC)
                 addAction("com.syu.music")
             }
-            registerReceiver(fytReceiver, filter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(fytReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(fytReceiver, filter)
+            }
             Log.d(TAG, "Dynamic broadcast receiver for com.fyt.launcher.music registered successfully")
         } catch (e: Exception) {
             Log.w(TAG, "Cannot register dynamic fytReceiver", e)

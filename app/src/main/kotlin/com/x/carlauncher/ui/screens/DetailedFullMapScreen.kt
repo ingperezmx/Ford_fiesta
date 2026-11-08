@@ -244,20 +244,6 @@ fun DetailedFullMapScreen(
         }
     }
 
-    // Preset Destinations around vehicle area (Nuevo Leon / Monterrey / San Nicolas).
-    // Sin distancias ni tiempos inventados: la distancia se calcula con el
-    // GPS real y el ETA solo existe cuando hay una ruta real calculada.
-    val defaultDestinations = remember {
-        listOf(
-            NavDestination("Macroplaza Monterrey", "Centro / Turismo", GeoPoint(25.6691, -100.3099)),
-            NavDestination("Parque Fundidora", "Paseo / Eventos", GeoPoint(25.6783, -100.2842)),
-            NavDestination("Soriana Hiper San Nicolas", "Supermercado", GeoPoint(25.7420, -100.2980)),
-            NavDestination("Gasolinera Pemex", "Combustible", GeoPoint(25.7350, -100.2850)),
-            NavDestination("OXXO Las Americas", "Tienda de Conveniencia", GeoPoint(25.7310, -100.2920)),
-            NavDestination("HEB Universidad", "Supermercado", GeoPoint(25.7260, -100.3120))
-        )
-    }
-
     // Distancia real (haversine) desde la posición GPS actual hasta un destino.
     // Null si todavía no hay fix de GPS: no se inventa ninguna distancia.
     fun distanceKmTo(dest: GeoPoint): Float? {
@@ -272,7 +258,8 @@ fun DetailedFullMapScreen(
         return (earthRadius * c / 1000.0).toFloat()
     }
 
-    var selectedDestination by remember { mutableStateOf(defaultDestinations.first()) }
+    // Sin destinos ni coordenadas fijas en el código: el usuario elige cualquier destino de México en el buscador.
+    var selectedDestination by remember { mutableStateOf<NavDestination?>(null) }
 
     // Elegir un destino (buscado o reciente): la ruta OSRM se
     // calcula sola por el LaunchedEffect(selectedDestination) y el boton
@@ -365,13 +352,14 @@ fun DetailedFullMapScreen(
             overlays.add(carMarker)
             carMarkerRef = carMarker
 
-            // Destination Marker Pin
+            // Destination Marker Pin (oculto hasta que el usuario seleccione un destino)
             val destMarker = Marker(this).apply {
-                position = selectedDestination.geoPoint
+                position = GeoPoint(0.0, 0.0)
                 icon = destPinIcon
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 setInfoWindow(null)
-                title = selectedDestination.name
+                title = ""
+                isEnabled = false
             }
             overlays.add(destMarker)
             destMarkerRef = destMarker
@@ -433,18 +421,23 @@ fun DetailedFullMapScreen(
         map.invalidate()
     }
 
-    // Calculate real road network route (OSRM) whenever destination is picked
-    LaunchedEffect(selectedDestination) {
-        destMarkerRef?.position = selectedDestination.geoPoint
-        destMarkerRef?.title = selectedDestination.name
-        val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-        CarRouteManager.calculateRoute(currentGeo, selectedDestination.geoPoint, selectedDestination.name)
+    // Calculate real road network route (OSRM) only when user picks a destination and has real GPS fix
+    LaunchedEffect(selectedDestination, vehicleLoc.hasFix) {
+        val dest = selectedDestination ?: return@LaunchedEffect
+        destMarkerRef?.isEnabled = true
+        destMarkerRef?.position = dest.geoPoint
+        destMarkerRef?.title = dest.name
+        if (vehicleLoc.hasFix && (vehicleLoc.latitude != 0.0 || vehicleLoc.longitude != 0.0)) {
+            val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
+            CarRouteManager.calculateRoute(currentGeo, dest.geoPoint, dest.name)
+        }
         mapRef?.invalidate()
     }
 
     // Update real street polyline overlay whenever activeRoute updates
     LaunchedEffect(activeRoute) {
         val route = activeRoute ?: return@LaunchedEffect
+        destMarkerRef?.isEnabled = true
         destMarkerRef?.position = route.destinationPoint
         destMarkerRef?.title = route.destinationName
         routePolylineRef?.setPoints(route.roadPoints)
@@ -963,7 +956,10 @@ fun DetailedFullMapScreen(
                                         val km = liveRemainingMeters?.let { it / 1000.0 }
                                             ?: (activeRoute!!.totalDistanceMeters / 1000.0)
                                         String.format("%.1f km", km) + " · Ruta Real OSRM"
-                                    } else "Sin ruta · ${(distanceKmTo(selectedDestination.geoPoint)?.let { String.format("%.1f km", it) } ?: "—")}",
+                                    } else {
+                                        val d = selectedDestination?.let { distanceKmTo(it.geoPoint) }
+                                        "Sin ruta · ${d?.let { String.format("%.1f km", it) } ?: "—"}"
+                                    },
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF10B981)
@@ -981,7 +977,12 @@ fun DetailedFullMapScreen(
                     // Google Maps Button (Real Google Maps Routing)
                     Surface(
                         onClick = {
-                            CarRouteManager.openInGoogleMaps(context, selectedDestination.geoPoint, selectedDestination.name)
+                            val dest = selectedDestination ?: activeRoute?.let { NavDestination(it.destinationName, "", it.destinationPoint) }
+                            if (dest != null) {
+                                CarRouteManager.openInGoogleMaps(context, dest.geoPoint, dest.name)
+                            } else {
+                                showSearchOverlay = true
+                            }
                         },
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFF0F172A),
@@ -1013,15 +1014,18 @@ fun DetailedFullMapScreen(
                         onClick = {
                             if (!isNavigating) {
                                 val route = activeRoute
+                                val dest = selectedDestination
                                 if (route != null) {
                                     CarRouteManager.startNavigation(context, route)
-                                } else {
+                                } else if (dest != null && vehicleLoc.hasFix) {
                                     val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-                                    CarRouteManager.calculateRoute(currentGeo, selectedDestination.geoPoint, selectedDestination.name) { calculated ->
+                                    CarRouteManager.calculateRoute(currentGeo, dest.geoPoint, dest.name) { calculated ->
                                         if (calculated != null) {
                                             CarRouteManager.startNavigation(context, calculated)
                                         }
                                     }
+                                } else {
+                                    showSearchOverlay = true
                                 }
                             } else {
                                 CarRouteManager.stopNavigation()
@@ -1331,7 +1335,7 @@ fun DetailedFullMapScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Mapas Offline Monterrey",
+                                        text = "Mapas Offline (Zona Actual)",
                                         color = Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
@@ -1347,7 +1351,7 @@ fun DetailedFullMapScreen(
                                 Button(
                                     onClick = {
                                         if (mapRef != null) {
-                                            OfflineMapManager.downloadMonterreyArea(context, mapRef!!)
+                                            OfflineMapManager.downloadCurrentArea(context, mapRef!!)
                                         } else {
                                             Toast.makeText(context, "Mapa inicializandose...", Toast.LENGTH_SHORT).show()
                                         }

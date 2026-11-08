@@ -448,7 +448,7 @@ fun VehicleCard(
                                                 .background(Color(0xFF10B981), CircleShape)
                                         )
                                         Text(
-                                            text = "${if (isPreviewHighwayMode && liveSpeedKmh < 10f) 65 else liveSpeedKmh.toInt()} km/h",
+                                            text = "${liveSpeedKmh.toInt()} km/h",
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White
@@ -889,12 +889,12 @@ private fun WeatherWidget(weatherData: WeatherData?) {
         return
     }
 
-    val city = stripAccents(weatherData.cityName?.ifBlank { "Cuauhtemoc" } ?: "Cuauhtemoc")
-    val department = stripAccents(weatherData.department?.ifBlank { "Nuevo Leon" } ?: "Nuevo Leon")
-    val country = weatherData.country?.ifBlank { "MX" } ?: "MX"
+    val city = stripAccents(weatherData.cityName?.ifBlank { "Ubicacion actual" } ?: "Ubicacion actual")
+    val department = stripAccents(weatherData.department ?: "")
+    val country = weatherData.country ?: ""
     val rawDesc = weatherData.description?.ifBlank { "Despejado" } ?: "Despejado"
     val desc = stripAccents(rawDesc)
-    val displayLocation = "$city, $department, $country"
+    val displayLocation = listOf(city, department, country).filter { it.isNotBlank() }.joinToString(", ")
     Column(modifier = Modifier.fillMaxWidth()) {
         // Location row: Pin + City Name + Department + Country + Update interval
         Row(

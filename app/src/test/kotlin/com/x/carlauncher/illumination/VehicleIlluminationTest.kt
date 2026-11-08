@@ -11,14 +11,14 @@ import java.util.TimeZone
  * Pruebas unitarias de iluminación automotriz para XCarOS (Ford Fiesta 2016).
  *
  * Verifica con rigor matemático que los faros del carro se apaguen durante el DÍA
- * y se enciendan solo durante la NOCHE según las coordenadas de Monterrey, NL
- * (Macroplaza, lugar público).
+ * y se enciendan solo durante la NOCHE usando el algoritmo astronómico NOAA en México.
  */
 class VehicleIlluminationTest {
 
-    private val lat = 25.6691
-    private val lng = -100.3099
-    private val timeZone = TimeZone.getTimeZone("America/Monterrey")
+    // Coordenadas genéricas del centro de la República Mexicana para cálculo solar
+    private val lat = 20.0
+    private val lng = -100.0
+    private val timeZone = TimeZone.getTimeZone("America/Mexico_City")
 
     private fun createCalendar(hour: Int, minute: Int, dayOfYear: Int = 305): Calendar {
         return Calendar.getInstance(timeZone).apply {
