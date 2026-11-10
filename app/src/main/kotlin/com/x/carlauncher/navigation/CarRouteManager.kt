@@ -334,6 +334,7 @@ object CarRouteManager {
                         CarVoiceAssistant.getInstance(context).speak(arrivalMsg)
                     } catch (_: Exception) {}
                     _isNavigating.value = false
+                    _activeRoute.value = null
                     break
                 }
 
@@ -377,12 +378,17 @@ object CarRouteManager {
 
     fun stopNavigation() {
         _isNavigating.value = false
+        _activeRoute.value = null
         navigationJob?.cancel()
         navigationJob = null
         _currentManeuver.value = TurnManeuver.STRAIGHT
         _targetTurnAngle.value = 0f
         _distanceToNextManeuver.value = 0.0
         _currentInstruction.value = "Navegacion finalizada"
+    }
+
+    fun clearRoute() {
+        stopNavigation()
     }
 
     // ── Progreso en vivo por la ruta ──────────────────────────────────────────

@@ -391,6 +391,8 @@ fun DetailedFullMapScreen(
         val route = activeRoute
         if (route != null && vehicleLoc.hasFix) {
             routePolylineRef?.setPoints(CarRouteManager.remainingRoadPoints(effectiveCarPos, route))
+        } else if (route == null) {
+            routePolylineRef?.setPoints(emptyList())
         }
         if (vehicleLoc.hasFix) { mapRef?.controller?.animateTo(effectiveCarPos) } else if (false) {
             mapRef?.controller?.animateTo(effectiveCarPos)
@@ -438,11 +440,22 @@ fun DetailedFullMapScreen(
 
     // Update real street polyline overlay whenever activeRoute updates
     LaunchedEffect(activeRoute) {
-        val route = activeRoute ?: return@LaunchedEffect
-        destMarkerRef?.isEnabled = true
-        destMarkerRef?.position = route.destinationPoint
-        destMarkerRef?.title = route.destinationName
-        routePolylineRef?.setPoints(route.roadPoints)
+        val route = activeRoute
+        if (route != null) {
+            destMarkerRef?.isEnabled = true
+            destMarkerRef?.position = route.destinationPoint
+            destMarkerRef?.title = route.destinationName
+            routePolylineRef?.setPoints(route.roadPoints)
+            if (selectedDestination?.geoPoint != route.destinationPoint) {
+                selectedDestination = NavDestination(route.destinationName, "", route.destinationPoint)
+                searchQuery = route.destinationName
+            }
+        } else {
+            destMarkerRef?.isEnabled = false
+            routePolylineRef?.setPoints(emptyList())
+            selectedDestination = null
+            searchQuery = ""
+        }
         mapRef?.invalidate()
     }
 
@@ -657,8 +670,23 @@ fun DetailedFullMapScreen(
                     fontSize = 11.sp,
                     color = if (searchQuery.isNotBlank()) Color.White else Color(0xFF94A3B8),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+                if (activeRoute != null || selectedDestination != null) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Borrar ruta",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable {
+                                CarRouteManager.clearRoute()
+                                selectedDestination = null
+                                searchQuery = ""
+                            }
+                    )
+                }
             }
         }
 
@@ -1031,7 +1059,9 @@ fun DetailedFullMapScreen(
                                 }
                             } else {
                                 CarRouteManager.stopNavigation()
-                                Toast.makeText(context, "Navegacion finalizada.", Toast.LENGTH_SHORT).show()
+                                selectedDestination = null
+                                searchQuery = ""
+                                Toast.makeText(context, "Navegación finalizada y ruta eliminada.", Toast.LENGTH_SHORT).show()
                             }
                         },
                         shape = RoundedCornerShape(20.dp),

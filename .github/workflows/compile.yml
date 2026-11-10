@@ -50,9 +50,6 @@ jobs:
         printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' "${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" "${{ secrets.RELEASE_KEY_PASSWORD }}" "${{ secrets.RELEASE_KEY_ALIAS }}" > "$GITHUB_WORKSPACE/../../tools/release-keystore.properties"
 
     - name: Compilar APK Oficial Firmado
-      env:
-        MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
-        OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
       run: ./gradlew assembleRelease
 
     - name: Generar etiqueta de tiempo para la Version

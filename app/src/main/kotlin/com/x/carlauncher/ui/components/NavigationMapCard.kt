@@ -40,6 +40,10 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberMarkerState
+import com.x.carlauncher.navigation.CarRouteManager
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -54,6 +58,9 @@ fun NavigationMapCard(
     val obdData by ObdManager.obdData.collectAsState()
     val compassHeading by VehicleCompassManager.compassHeading.collectAsState()
     val cardinalDir by VehicleCompassManager.cardinalDirection.collectAsState()
+    val activeRoute by CarRouteManager.activeRoute.collectAsState()
+    val isNavigating by CarRouteManager.isNavigating.collectAsState()
+    val currentInstruction by CarRouteManager.currentInstruction.collectAsState()
 
     var isCourseUp by remember { mutableStateOf(true) }
     var recenterCounter by remember { mutableStateOf(0) }
@@ -105,6 +112,32 @@ fun NavigationMapCard(
         } catch (_: Exception) {}
     }
 
+    // Ruta sincronizada en Google Maps
+    val routeLatLngs = remember(activeRoute, vehicleLoc.latitude, vehicleLoc.longitude) {
+        val route = activeRoute
+        if (route != null && vehicleLoc.hasFix) {
+            val remaining = CarRouteManager.remainingRoadPoints(
+                org.osmdroid.util.GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude),
+                route
+            )
+            remaining.map { LatLng(it.latitude, it.longitude) }
+        } else if (route != null) {
+            route.roadPoints.map { LatLng(it.latitude, it.longitude) }
+        } else {
+            emptyList()
+        }
+    }
+
+    val destLatLng = remember(activeRoute) {
+        activeRoute?.destinationPoint?.let { LatLng(it.latitude, it.longitude) }
+    }
+    val destMarkerState = rememberMarkerState()
+    LaunchedEffect(destLatLng) {
+        if (destLatLng != null) {
+            destMarkerState.position = destLatLng
+        }
+    }
+
     LaunchedEffect(recenterCounter) {
         if (recenterCounter > 0 && (vehicleLoc.latitude != 0.0 || vehicleLoc.longitude != 0.0)) {
             try {
@@ -139,7 +172,21 @@ fun NavigationMapCard(
                     myLocationButtonEnabled = false,
                     compassEnabled = false
                 )
-            )
+            ) {
+                if (routeLatLngs.isNotEmpty()) {
+                    Polyline(
+                        points = routeLatLngs,
+                        color = Color(0xFF00E5FF),
+                        width = 12f
+                    )
+                }
+                if (destLatLng != null) {
+                    Marker(
+                        state = destMarkerState,
+                        title = activeRoute?.destinationName ?: "Destino"
+                    )
+                }
+            }
 
             // Gradientes decorativos
             Box(
@@ -206,13 +253,43 @@ fun NavigationMapCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Marcador de velocidad inferior (HUD)
+                // Marcador de velocidad e instrucción de navegación inferior (HUD)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                     Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0F172A).copy(alpha = 0.88f)) {
                         Row(modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(text = "${liveSpeedKmh.toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.White)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(text = "km/h", fontSize = 9.sp, color = Color(0xFF94A3B8))
+                        }
+                    }
+
+                    if (activeRoute != null) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFF0F172A).copy(alpha = 0.90f),
+                            border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f)),
+                            modifier = Modifier.clickable { onToggleExpand?.invoke() ?: onMapClick() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Navigation,
+                                    contentDescription = null,
+                                    tint = Color(0xFF00E5FF),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = if (isNavigating && currentInstruction.isNotBlank()) currentInstruction else activeRoute!!.destinationName,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
