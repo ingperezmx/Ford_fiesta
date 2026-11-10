@@ -21,8 +21,8 @@ android {
         // (Antes siempre era 1, y con cada cambio de firma habia que
         // desinstalar; con la clave de lanzamiento fijada y este numero
         // subiendo, las proximas actualizaciones se instalan encima.)
-        versionCode = 18
-        versionName = "1.0.17"
+        versionCode = 20
+        versionName = "1.0.20"
 
         val localPropsFile = rootProject.file("local.properties")
         val localProps: Map<String, String> = if (localPropsFile.exists()) {
@@ -152,9 +152,10 @@ dependencies {
     // Lifecycle / ViewModel for Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
-    // Maps — OpenStreetMap
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
-    implementation("androidx.work:work-runtime-ktx:2.8.1")
+    // Google Maps (mapa, rutas y lugares) — ver CarRouteManager y PlaceSearch.
+    // OkHttp directo (antes venía transitivo por osmdroid): lo usan CarRouteManager
+    // y PlaceSearch para las llamadas REST a Routes API y Places API (New).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Networking — Retrofit + Gson converter
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

@@ -3,13 +3,8 @@ package com.x.carlauncher.ui.screens
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
-import android.view.MotionEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,46 +24,47 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.JointType
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.RoundCap
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.x.carlauncher.R
 import com.x.carlauncher.location.VehicleCompassManager
 import com.x.carlauncher.location.VehicleLocationManager
-import com.x.carlauncher.navigation.ActiveNavRoute
 import com.x.carlauncher.navigation.CarRouteManager
-import com.x.carlauncher.navigation.MapDownloadWorker
-import com.x.carlauncher.navigation.OfflineMapManager
 import com.x.carlauncher.navigation.PlaceResult
 import com.x.carlauncher.navigation.PlaceSearch
 import com.x.carlauncher.voice.CarVoiceAssistant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -78,7 +74,7 @@ import java.util.*
 data class NavDestination(
     val name: String,
     val category: String,
-    val geoPoint: GeoPoint
+    val geoPoint: LatLng
 )
 
 /**
@@ -159,7 +155,9 @@ private fun DestinationRow(
  * - Left Floating Controls: Zoom In, 3D Perspective Tilt, Zoom Out, Recenter GPS.
  * - Right Floating Controls: Compass North/Course-Up, Vertical Zoom Slider, Settings, Traffic OTA Updates.
  * - Bottom HUD: ETA Badge (13.50 min), "Navegar a su Destino" Action Button.
- * - Native OpenStreetMap with Cyan Route Polyline and miniature blue Ford Fiesta marker.
+ * - Native Google Maps with Cyan Route Polyline and miniature blue Ford Fiesta marker.
+ * - La vista 3D usa la inclinacion real de la camara de Google Maps (antes
+ *   era una proyeccion falsa con graphicsLayer sobre el mapa anterior).
  */
 @Composable
 fun DetailedFullMapScreen(
@@ -176,7 +174,6 @@ fun DetailedFullMapScreen(
     // Unified Route & Navigation Manager States
     val activeRoute by CarRouteManager.activeRoute.collectAsState()
     val isNavigating by CarRouteManager.isNavigating.collectAsState()
-    val currentInstruction by CarRouteManager.currentInstruction.collectAsState()
 
     // Progreso en vivo: distancia y ETA que faltan, calculados desde la
     // posicion GPS actual (antes el HUD mostraba los totales fijos del
@@ -185,7 +182,7 @@ fun DetailedFullMapScreen(
         val route = activeRoute
         if (route != null && vehicleLoc.hasFix) {
             CarRouteManager.remainingRoadDistanceMeters(
-                GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude), route
+                LatLng(vehicleLoc.latitude, vehicleLoc.longitude), route
             )
         } else null
     }
@@ -193,7 +190,7 @@ fun DetailedFullMapScreen(
         val route = activeRoute
         if (route != null && vehicleLoc.hasFix) {
             CarRouteManager.remainingEtaSeconds(
-                GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude), route
+                LatLng(vehicleLoc.latitude, vehicleLoc.longitude), route
             )
         } else null
     }
@@ -204,6 +201,7 @@ fun DetailedFullMapScreen(
     var isCourseUp by remember { mutableStateOf(true) }
     var is3DTilt by remember { mutableStateOf(false) }
     var zoomLevel by remember { mutableDoubleStateOf(15.5) }
+    var recenterCounter by remember { mutableIntStateOf(0) }
     var isTrafficLayerActive by remember { mutableStateOf(true) }
     var showSearchOverlay by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -212,7 +210,7 @@ fun DetailedFullMapScreen(
     // Foco del campo de busqueda: al abrir la ventana el teclado se abre solo.
     val searchFocusRequester = remember { FocusRequester() }
 
-    // ── Busqueda de lugares (Nominatim / OpenStreetMap) ──────────────
+    // ── Busqueda de lugares (Google Places API New) ─────────────────────
     // Resultados de la busqueda: null = aun no se busco (se muestran las
     // busquedas recientes).
     var searchResults by remember { mutableStateOf<List<PlaceResult>?>(null) }
@@ -234,7 +232,7 @@ fun DetailedFullMapScreen(
             isSearching = true
             searchError = null
             try {
-                searchResults = PlaceSearch.search(q)
+                searchResults = PlaceSearch.search(context, q)
             } catch (_: Exception) {
                 searchError = "Sin conexión para buscar. Revisa el internet e inténtalo de nuevo."
                 searchResults = emptyList()
@@ -244,9 +242,23 @@ fun DetailedFullMapScreen(
         }
     }
 
+    // Preset Destinations around vehicle area (Nuevo Leon / Monterrey / San Nicolas).
+    // Sin distancias ni tiempos inventados: la distancia se calcula con el
+    // GPS real y el ETA solo existe cuando hay una ruta real calculada.
+    val defaultDestinations = remember {
+        listOf(
+            NavDestination("Macroplaza Monterrey", "Centro / Turismo", LatLng(25.6691, -100.3099)),
+            NavDestination("Parque Fundidora", "Paseo / Eventos", LatLng(25.6783, -100.2842)),
+            NavDestination("Soriana Hiper San Nicolas", "Supermercado", LatLng(25.7420, -100.2980)),
+            NavDestination("Gasolinera Pemex", "Combustible", LatLng(25.7350, -100.2850)),
+            NavDestination("OXXO Las Americas", "Tienda de Conveniencia", LatLng(25.7310, -100.2920)),
+            NavDestination("HEB Universidad", "Supermercado", LatLng(25.7260, -100.3120))
+        )
+    }
+
     // Distancia real (haversine) desde la posición GPS actual hasta un destino.
     // Null si todavía no hay fix de GPS: no se inventa ninguna distancia.
-    fun distanceKmTo(dest: GeoPoint): Float? {
+    fun distanceKmTo(dest: LatLng): Float? {
         if (!vehicleLoc.hasFix) return null
         val earthRadius = 6371000.0
         val dLat = Math.toRadians(dest.latitude - vehicleLoc.latitude)
@@ -258,10 +270,9 @@ fun DetailedFullMapScreen(
         return (earthRadius * c / 1000.0).toFloat()
     }
 
-    // Sin destinos ni coordenadas fijas en el código: el usuario elige cualquier destino de México en el buscador.
-    var selectedDestination by remember { mutableStateOf<NavDestination?>(null) }
+    var selectedDestination by remember { mutableStateOf(defaultDestinations.first()) }
 
-    // Elegir un destino (buscado o reciente): la ruta OSRM se
+    // Elegir un destino (buscado o reciente): la ruta de Google se
     // calcula sola por el LaunchedEffect(selectedDestination) y el boton
     // "Navegar en Pantalla" arranca la navegacion guiada.
     fun pickPlace(dest: NavDestination, saveRecent: PlaceResult? = null) {
@@ -277,19 +288,13 @@ fun DetailedFullMapScreen(
         } catch (_: Exception) {}
     }
 
-    // Map references
-    var mapRef by remember { mutableStateOf<MapView?>(null) }
-    var carMarkerRef by remember { mutableStateOf<Marker?>(null) }
-    var destMarkerRef by remember { mutableStateOf<Marker?>(null) }
-    var routePolylineRef by remember { mutableStateOf<Polyline?>(null) }
-
     // Formatted real-time clock and date
     var currentTimeStr by remember { mutableStateOf("4:30 PM") }
     var currentDateStr by remember { mutableStateOf("Martes, 12 Octubre") }
 
     LaunchedEffect(Unit) {
         val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-        val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale.forLanguageTag("es-MX"))
+        val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale("es", "MX"))
         while (isActive) {
             val now = Date()
             currentTimeStr = timeFormat.format(now).uppercase()
@@ -299,107 +304,63 @@ fun DetailedFullMapScreen(
         }
     }
 
-    // 3D Perspective Tilt Animation
-    val tiltAngle by animateFloatAsState(
-        targetValue = if (is3DTilt) 52f else 0f,
-        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-        label = "tilt3D"
-    )
-    val scaleFactor by animateFloatAsState(
-        targetValue = if (is3DTilt) 2.35f else 1.0f,
-        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-        label = "scale3D"
-    )
-    val transY by animateDpAsState(
-        targetValue = if (is3DTilt) 52.dp else 0.dp,
-        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-        label = "transY3D"
-    )
+    // ── Mapa Google Maps ──────────────────────────────────────────────────
+    // Posicion inicial: el GPS real si hay fix; si no, Macroplaza (el
+    // destino inicial) para no arrancar en el (0,0) del oceano.
+    val initialLatLng = if (vehicleLoc.hasFix) {
+        LatLng(vehicleLoc.latitude, vehicleLoc.longitude)
+    } else {
+        LatLng(25.6691, -100.3099)
+    }
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(initialLatLng, zoomLevel.toFloat())
+    }
+    val carPos = LatLng(vehicleLoc.latitude, vehicleLoc.longitude)
+    val carMarkerState = remember { MarkerState(position = initialLatLng) }
+    val destMarkerState = remember { MarkerState(position = selectedDestination.geoPoint) }
 
-    // Vehicle markers
-    val vehicleFiestaIcon = remember(context) { createFiestaMarkerDrawableDetailed(context) }
-    val destPinIcon = remember(context) { createDestinationPinDrawable(context) }
+    // Iconos de marcador (Fiesta azul del auto y pin rojo del destino).
+    val fiestaIcon: BitmapDescriptor = remember(context) {
+        BitmapDescriptorFactory.fromBitmap(createFiestaMarkerBitmap(context))
+    }
+    val destPinIcon: BitmapDescriptor = remember(context) {
+        BitmapDescriptorFactory.fromBitmap(createDestinationPinBitmap(context))
+    }
 
-    // La polilínea solo muestra la ruta REAL calculada (OSRM). Sin ruta
-    // no se dibuja ninguna línea inventada entre el auto y el destino.
-
-    val mapView = remember {
-        val osmdroidBase = File(context.filesDir, "osmdroid").apply { if (!exists()) mkdirs() }
-        val osmdroidCache = File(context.cacheDir, "osmdroid/tiles").apply { if (!exists()) mkdirs() }
-
-        Configuration.getInstance().userAgentValue = "PabloCarOS-Auto/1.0"
-        Configuration.getInstance().osmdroidBasePath = osmdroidBase
-        Configuration.getInstance().osmdroidTileCache = osmdroidCache
-
-        MapView(context).apply {
-            setTileSource(OfflineMapManager.AUTOMOTIVE_TILE_SOURCE)
-            isTilesScaledToDpi = true
-            setBuiltInZoomControls(false)
-            setMultiTouchControls(true)
-            setUseDataConnection(true)
-            controller.setZoom(zoomLevel)
-            controller.setCenter(GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude))
-
-            // Vehicle Marker: Miniature Blue Ford Fiesta
-            val carMarker = Marker(this).apply {
-                position = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-                icon = vehicleFiestaIcon
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                rotation = 0f
-                setInfoWindow(null)
-                isDraggable = false
-                isEnabled = vehicleLoc.hasFix
-            }
-            overlays.add(carMarker)
-            carMarkerRef = carMarker
-
-            // Destination Marker Pin (oculto hasta que el usuario seleccione un destino)
-            val destMarker = Marker(this).apply {
-                position = GeoPoint(0.0, 0.0)
-                icon = destPinIcon
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                setInfoWindow(null)
-                title = ""
-                isEnabled = false
-            }
-            overlays.add(destMarker)
-            destMarkerRef = destMarker
-
-            // Route Polyline (Glowing Neon Cyan) - solo ruta real calculada
-            val polyline = Polyline(this).apply {
-                outlinePaint.color = android.graphics.Color.parseColor("#00E5FF")
-                outlinePaint.strokeWidth = 14f
-                outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
-                outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                setPoints(emptyList())
-            }
-            overlays.add(0, polyline)
-            routePolylineRef = polyline
-
-            mapRef = this
+    // La polilínea solo muestra la ruta REAL calculada (Google Routes API).
+    // Sin ruta no se dibuja ninguna línea inventada entre el auto y el
+    // destino. Mientras se avanza se recorta a lo que falta por recorrer.
+    val routePoints = remember(vehicleLoc.latitude, vehicleLoc.longitude, activeRoute) {
+        val route = activeRoute
+        when {
+            route == null -> emptyList()
+            vehicleLoc.hasFix -> CarRouteManager.remainingRoadPoints(carPos, route)
+            else -> route.roadPoints
         }
     }
 
-    // Synchronize vehicle marker with live real GPS only. La polilinea de la
-    // ruta tambien se recorta a lo que falta por recorrer, para que la ruta
-    // avance visualmente mientras el auto se mueve (antes quedaba completa
-    // y la distancia/ETA del HUD nunca bajaban).
-    val effectiveCarPos = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-    LaunchedEffect(effectiveCarPos.latitude, effectiveCarPos.longitude, activeRoute) {
-        carMarkerRef?.isEnabled = vehicleLoc.hasFix
-        carMarkerRef?.position = effectiveCarPos
-        val route = activeRoute
-        if (route != null && vehicleLoc.hasFix) {
-            routePolylineRef?.setPoints(CarRouteManager.remainingRoadPoints(effectiveCarPos, route))
-        } else if (route == null) {
-            routePolylineRef?.setPoints(emptyList())
-        }
-        if (vehicleLoc.hasFix) { mapRef?.controller?.animateTo(effectiveCarPos) } else if (false) {
-            mapRef?.controller?.animateTo(effectiveCarPos)
-        } else {
-            mapRef?.controller?.animateTo(effectiveCarPos)
-        }
-        mapRef?.invalidate()
+    // La camara sigue al GPS en vivo y aplica zoom, inclinacion 3D y rumbo.
+    // Sin fix de GPS no se mueve (se queda en la posicion inicial).
+    val targetTilt = if (is3DTilt) 60f else 0f
+    val targetBearing = if (isCourseUp) compassHeading else 0f
+    LaunchedEffect(carPos, zoomLevel, targetTilt, targetBearing, recenterCounter) {
+        if (!vehicleLoc.hasFix) return@LaunchedEffect
+        cameraPositionState.animate(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.builder()
+                    .target(carPos)
+                    .zoom(zoomLevel.toFloat())
+                    .bearing(targetBearing)
+                    .tilt(targetTilt)
+                    .build()
+            ),
+            500
+        )
+    }
+
+    // El marcador del auto sigue al GPS en vivo.
+    LaunchedEffect(carPos) {
+        carMarkerState.position = carPos
     }
 
     // Auto-engage 3D tilt when navigating along route
@@ -409,61 +370,11 @@ fun DetailedFullMapScreen(
         }
     }
 
-    // Sync compass orientation (real heading from sensors / GPS)
-    val effectiveHeading = compassHeading
-    LaunchedEffect(effectiveHeading, isCourseUp) {
-        val map = mapRef ?: return@LaunchedEffect
-        val marker = carMarkerRef ?: return@LaunchedEffect
-        if (isCourseUp) {
-            val targetOrientation = (360f - effectiveHeading) % 360f
-            map.setMapOrientation(targetOrientation, false)
-            marker.rotation = 0f
-        } else {
-            map.setMapOrientation(0f, false)
-            marker.rotation = effectiveHeading
-        }
-        map.invalidate()
-    }
-
-    // Calculate real road network route (OSRM) only when user picks a destination and has real GPS fix
-    LaunchedEffect(selectedDestination, vehicleLoc.hasFix) {
-        val dest = selectedDestination ?: return@LaunchedEffect
-        destMarkerRef?.isEnabled = true
-        destMarkerRef?.position = dest.geoPoint
-        destMarkerRef?.title = dest.name
-        if (vehicleLoc.hasFix && (vehicleLoc.latitude != 0.0 || vehicleLoc.longitude != 0.0)) {
-            val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-            CarRouteManager.calculateRoute(currentGeo, dest.geoPoint, dest.name)
-        }
-        mapRef?.invalidate()
-    }
-
-    // Update real street polyline overlay whenever activeRoute updates
-    LaunchedEffect(activeRoute) {
-        val route = activeRoute
-        if (route != null) {
-            destMarkerRef?.isEnabled = true
-            destMarkerRef?.position = route.destinationPoint
-            destMarkerRef?.title = route.destinationName
-            routePolylineRef?.setPoints(route.roadPoints)
-            if (selectedDestination?.geoPoint != route.destinationPoint) {
-                selectedDestination = NavDestination(route.destinationName, "", route.destinationPoint)
-                searchQuery = route.destinationName
-            }
-        } else {
-            destMarkerRef?.isEnabled = false
-            routePolylineRef?.setPoints(emptyList())
-            selectedDestination = null
-            searchQuery = ""
-        }
-        mapRef?.invalidate()
-    }
-
-    DisposableEffect(mapView) {
-        mapView.onResume()
-        onDispose {
-            mapView.onPause()
-        }
+    // Calculate real road network route (Google Routes API) whenever destination is picked
+    LaunchedEffect(selectedDestination) {
+        destMarkerState.position = selectedDestination.geoPoint
+        val currentGeo = LatLng(vehicleLoc.latitude, vehicleLoc.longitude)
+        CarRouteManager.calculateRoute(context, currentGeo, selectedDestination.geoPoint, selectedDestination.name)
     }
 
     // ── ROOT CONTAINER ──────────────────────────────────────────────────────────
@@ -472,45 +383,46 @@ fun DetailedFullMapScreen(
             .fillMaxSize()
             .background(Color(0xFF090E1D))
     ) {
-        // ── 1. Full-Bleed Map Canvas with 3D Tilt Projection ────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clipToBounds()
-        ) {
-            AndroidView(
-                factory = { mapView },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        if (tiltAngle > 0.2f) {
-                            rotationX = tiltAngle
-                            cameraDistance = 14f * density
-                            transformOrigin = TransformOrigin(0.5f, 0.74f)
-                            scaleX = scaleFactor
-                            scaleY = scaleFactor
-                            translationY = transY.toPx()
-                        }
-                    }
+        // ── 1. Full-Bleed Map Canvas (Google Maps) ────────────────────────────
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(
+                mapType = MapType.NORMAL,
+                isTrafficEnabled = isTrafficLayerActive
+            ),
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                myLocationButtonEnabled = false,
+                compassEnabled = false,
+                mapToolbarEnabled = false
             )
-
-            // Atmospheric horizon vanishing gradient (when 3D is active)
-            if (tiltAngle > 2f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFF0F172A).copy(alpha = (tiltAngle / 52f) * 0.98f),
-                                    Color(0xFF0F172A).copy(alpha = (tiltAngle / 52f) * 0.75f),
-                                    Color(0xFF1E293B).copy(alpha = (tiltAngle / 52f) * 0.35f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .align(Alignment.TopCenter)
+        ) {
+            // Vehicle Marker: Miniature Blue Ford Fiesta. flat = true para
+            // que gire con el mapa; en Course-Up apunta hacia arriba (0f),
+            // en North-Up gira segun el rumbo del compas.
+            Marker(
+                state = carMarkerState,
+                icon = fiestaIcon,
+                anchor = Offset(0.5f, 0.5f),
+                flat = true,
+                rotation = if (isCourseUp) 0f else compassHeading
+            )
+            // Destination Marker Pin
+            Marker(
+                state = destMarkerState,
+                title = selectedDestination.name,
+                icon = destPinIcon
+            )
+            // Route Polyline (Glowing Neon Cyan) - solo ruta real calculada
+            if (routePoints.size >= 2) {
+                Polyline(
+                    points = routePoints,
+                    color = Color(0xFF00E5FF),
+                    width = 14f,
+                    jointType = JointType.ROUND,
+                    startCap = RoundCap(),
+                    endCap = RoundCap()
                 )
             }
         }
@@ -673,7 +585,7 @@ fun DetailedFullMapScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                if (activeRoute != null || selectedDestination != null) {
+                if (activeRoute != null) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Borrar ruta",
@@ -682,7 +594,6 @@ fun DetailedFullMapScreen(
                             .size(16.dp)
                             .clickable {
                                 CarRouteManager.clearRoute()
-                                selectedDestination = null
                                 searchQuery = ""
                             }
                     )
@@ -705,7 +616,6 @@ fun DetailedFullMapScreen(
             // Zoom In (+)
             IconButton(
                 onClick = {
-                    mapRef?.controller?.zoomIn()
                     zoomLevel = (zoomLevel + 1.0).coerceAtMost(19.0)
                 },
                 modifier = Modifier.size(36.dp)
@@ -737,7 +647,6 @@ fun DetailedFullMapScreen(
             // Zoom Out (-)
             IconButton(
                 onClick = {
-                    mapRef?.controller?.zoomOut()
                     zoomLevel = (zoomLevel - 1.0).coerceAtLeast(10.0)
                 },
                 modifier = Modifier.size(36.dp)
@@ -755,10 +664,8 @@ fun DetailedFullMapScreen(
             // Recenter GPS Button
             IconButton(
                 onClick = {
-                    val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-                    if (vehicleLoc.hasFix) mapRef?.controller?.animateTo(currentGeo) else Toast.makeText(context, "Esperando señal GPS en vivo...", Toast.LENGTH_SHORT).show()
-                    mapRef?.controller?.setZoom(16.0)
                     zoomLevel = 16.0
+                    recenterCounter++
                 },
                 modifier = Modifier.size(36.dp)
             ) {
@@ -812,7 +719,6 @@ fun DetailedFullMapScreen(
                             val fraction = 1f - (change.position.y / size.height).coerceIn(0f, 1f)
                             val newZoom = 10.0 + fraction * 9.0
                             zoomLevel = newZoom
-                            mapRef?.controller?.setZoom(newZoom)
                         }
                     },
                 contentAlignment = Alignment.BottomCenter
@@ -866,7 +772,7 @@ fun DetailedFullMapScreen(
                     isTrafficLayerActive = !isTrafficLayerActive
                     Toast.makeText(
                         context,
-                        if (isTrafficLayerActive) "Trafico OTA Activado (Actualizado)" else "Trafico OTA Desactivado",
+                        if (isTrafficLayerActive) "Trafico en el mapa Activado" else "Trafico en el mapa Desactivado",
                         Toast.LENGTH_SHORT
                     ).show()
                 },
@@ -985,11 +891,8 @@ fun DetailedFullMapScreen(
                                     text = if (activeRoute != null) {
                                         val km = liveRemainingMeters?.let { it / 1000.0 }
                                             ?: (activeRoute!!.totalDistanceMeters / 1000.0)
-                                        String.format("%.1f km", km) + " · Ruta Real OSRM"
-                                    } else {
-                                        val d = selectedDestination?.let { distanceKmTo(it.geoPoint) }
-                                        "Sin ruta · ${d?.let { String.format("%.1f km", it) } ?: "—"}"
-                                    },
+                                        String.format("%.1f km", km) + " · Ruta Google Maps"
+                                    } else "Sin ruta · ${(distanceKmTo(selectedDestination.geoPoint)?.let { String.format("%.1f km", it) } ?: "—")}",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF10B981)
@@ -1007,12 +910,7 @@ fun DetailedFullMapScreen(
                     // Google Maps Button (Real Google Maps Routing)
                     Surface(
                         onClick = {
-                            val dest = selectedDestination ?: activeRoute?.let { NavDestination(it.destinationName, "", it.destinationPoint) }
-                            if (dest != null) {
-                                CarRouteManager.openInGoogleMaps(context, dest.geoPoint, dest.name)
-                            } else {
-                                showSearchOverlay = true
-                            }
+                            CarRouteManager.openInGoogleMaps(context, selectedDestination.geoPoint, selectedDestination.name)
                         },
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFF0F172A),
@@ -1044,22 +942,18 @@ fun DetailedFullMapScreen(
                         onClick = {
                             if (!isNavigating) {
                                 val route = activeRoute
-                                val dest = selectedDestination
                                 if (route != null) {
                                     CarRouteManager.startNavigation(context, route)
-                                } else if (dest != null && vehicleLoc.hasFix) {
-                                    val currentGeo = GeoPoint(vehicleLoc.latitude, vehicleLoc.longitude)
-                                    CarRouteManager.calculateRoute(currentGeo, dest.geoPoint, dest.name) { calculated ->
+                                } else {
+                                    val currentGeo = LatLng(vehicleLoc.latitude, vehicleLoc.longitude)
+                                    CarRouteManager.calculateRoute(context, currentGeo, selectedDestination.geoPoint, selectedDestination.name) { calculated ->
                                         if (calculated != null) {
                                             CarRouteManager.startNavigation(context, calculated)
                                         }
                                     }
-                                } else {
-                                    showSearchOverlay = true
                                 }
                             } else {
                                 CarRouteManager.stopNavigation()
-                                selectedDestination = null
                                 searchQuery = ""
                                 Toast.makeText(context, "Navegación finalizada y ruta eliminada.", Toast.LENGTH_SHORT).show()
                             }
@@ -1140,7 +1034,7 @@ fun DetailedFullMapScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // ── Buscar cualquier lugar (Nominatim / OpenStreetMap) ──
+                        // ── Buscar cualquier lugar (Google Places) ──
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = {
@@ -1303,7 +1197,7 @@ fun DetailedFullMapScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Trafico OTA en Tiempo Real", color = Color(0xFFCBD5E1), fontSize = 13.sp)
+                            Text("Trafico en Tiempo Real", color = Color(0xFFCBD5E1), fontSize = 13.sp)
                             Switch(
                                 checked = isTrafficLayerActive,
                                 onCheckedChange = { isTrafficLayerActive = it }
@@ -1347,72 +1241,14 @@ fun DetailedFullMapScreen(
                             )
                         }
 
-                        // Offline Map Download Section for Monterrey & Nuevo Leon
-                        val isDownloadingMap by OfflineMapManager.isDownloading.collectAsState()
-                        val downloadProgress by OfflineMapManager.downloadProgress.collectAsState()
-                        val downloadStatus by OfflineMapManager.downloadStatus.collectAsState()
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF1E293B).copy(alpha = 0.6f))
-                                .padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Mapas Offline (Zona Actual)",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = downloadStatus,
-                                        color = if (isDownloadingMap) Color(0xFF38BDF8) else Color(0xFF94A3B8),
-                                        fontSize = 10.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Button(
-                                    onClick = {
-                                        if (mapRef != null) {
-                                            OfflineMapManager.downloadCurrentArea(context, mapRef!!)
-                                        } else {
-                                            Toast.makeText(context, "Mapa inicializandose...", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    enabled = !isDownloadingMap,
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text(
-                                        text = if (isDownloadingMap) "$downloadProgress%" else "Descargar",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            if (isDownloadingMap) {
-                                LinearProgressIndicator(
-                                    progress = { downloadProgress / 100f },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = Color(0xFF00E5FF),
-                                    trackColor = Color(0xFF0F172A)
-                                )
-                            }
-                        }
+                        // Google Maps no descarga mapas offline dentro de la
+                        // app: las areas sin conexion se administran desde
+                        // la app Google Maps (perfil -> Mapas sin conexion).
+                        Text(
+                            text = "Mapas sin conexión: se descargan desde la app Google Maps (perfil → Mapas sin conexión).",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 11.sp
+                        )
                     }
                 },
                 confirmButton = {
@@ -1428,7 +1264,7 @@ fun DetailedFullMapScreen(
 /**
  * Creates high-precision miniature blue Ford Fiesta marker with halo and shadow.
  */
-private fun createFiestaMarkerDrawableDetailed(context: Context): Drawable {
+private fun createFiestaMarkerBitmap(context: Context): Bitmap {
     val density = context.resources.displayMetrics.density
     val targetSizePx = (46 * density).toInt()
 
@@ -1467,19 +1303,19 @@ private fun createFiestaMarkerDrawableDetailed(context: Context): Drawable {
             val scaledFiesta = Bitmap.createScaledBitmap(origBitmap, targetSizePx, targetSizePx, true)
             canvas.drawBitmap(scaledFiesta, pad.toFloat(), pad.toFloat(), null)
 
-            BitmapDrawable(context.resources, output)
+            output
         } else {
-            createDefaultCircleMarker(context)
+            createDefaultCircleMarkerBitmap()
         }
     } catch (_: Exception) {
-        createDefaultCircleMarker(context)
+        createDefaultCircleMarkerBitmap()
     }
 }
 
 /**
- * Creates destination pin marker drawable.
+ * Creates destination pin marker bitmap.
  */
-private fun createDestinationPinDrawable(context: Context): Drawable {
+private fun createDestinationPinBitmap(context: Context): Bitmap {
     val density = context.resources.displayMetrics.density
     val w = (32 * density).toInt()
     val h = (40 * density).toInt()
@@ -1509,13 +1345,13 @@ private fun createDestinationPinDrawable(context: Context): Drawable {
     }
     canvas.drawPath(path, pinPaint)
 
-    return BitmapDrawable(context.resources, bitmap)
+    return bitmap
 }
 
 /**
  * Fallback circle marker if bitmap fails to decode.
  */
-private fun createDefaultCircleMarker(context: Context): Drawable {
+private fun createDefaultCircleMarkerBitmap(): Bitmap {
     val size = 48
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
@@ -1524,5 +1360,5 @@ private fun createDefaultCircleMarker(context: Context): Drawable {
         style = android.graphics.Paint.Style.FILL
     }
     canvas.drawCircle(size / 2f, size / 2f, size / 2.5f, paint)
-    return BitmapDrawable(context.resources, bitmap)
+    return bitmap
 }

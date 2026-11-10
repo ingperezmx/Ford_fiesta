@@ -394,7 +394,7 @@ object LyricsRepository {
 
                 client.newCall(searchReq).execute().use { response ->
                     if (response.isSuccessful) {
-                        val body = response.body()?.string()
+                        val body = response.body?.string()
                         if (!body.isNullOrBlank()) {
                             val json = JSONObject(body)
                             val result = json.optJSONObject("result")
@@ -421,7 +421,7 @@ object LyricsRepository {
 
                                         client.newCall(lyricReq).execute().use { lResp ->
                                             if (lResp.isSuccessful) {
-                                                val lBody = lResp.body()?.string()
+                                                val lBody = lResp.body?.string()
                                                 if (!lBody.isNullOrBlank()) {
                                                     val lJson = JSONObject(lBody)
                                                     val lrcObj = lJson.optJSONObject("lrc")
@@ -475,7 +475,7 @@ object LyricsRepository {
 
                 client.newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) {
-                        val body = resp.body()?.string()
+                        val body = resp.body?.string()
                         if (!body.isNullOrBlank()) {
                             val json = JSONObject(body)
                             val lyricsStr = json.optString("lyrics", "").trim()
@@ -514,7 +514,7 @@ object LyricsRepository {
 
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        val body = response.body()?.string()
+                        val body = response.body?.string()
                         if (!body.isNullOrBlank()) {
                             val json = JSONObject(body)
                             val results = json.optJSONArray("results")
@@ -532,7 +532,7 @@ object LyricsRepository {
                                             .build()
                                         client.newCall(lrcReq).execute().use { lrcResp ->
                                             if (lrcResp.isSuccessful) {
-                                                val lrcBody = lrcResp.body()?.string()
+                                                val lrcBody = lrcResp.body?.string()
                                                 if (!lrcBody.isNullOrBlank()) {
                                                     val parsed = parseLrc(lrcBody)
                                                     if (parsed.isNotEmpty()) {
@@ -574,7 +574,7 @@ object LyricsRepository {
 
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    val body = response.body()?.string()
+                    val body = response.body?.string()
                     if (!body.isNullOrBlank()) {
                         val json = JSONObject(body)
                         val synced = json.optString("syncedLyrics", "").trim()
@@ -609,7 +609,7 @@ object LyricsRepository {
 
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    val body = response.body()?.string()
+                    val body = response.body?.string()
                     if (!body.isNullOrBlank()) {
                         val array = JSONArray(body)
                         for (i in 0 until minOf(array.length(), 25)) {

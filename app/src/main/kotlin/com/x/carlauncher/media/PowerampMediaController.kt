@@ -1272,7 +1272,7 @@ class PowerampNotificationListener : NotificationListenerService() {
                             val req = Request.Builder().url(artUri).build()
                             LyricsRepository.okHttpClient.newCall(req).execute().use { resp ->
                                 if (resp.isSuccessful) {
-                                    resp.body()?.byteStream()?.use { stream ->
+                                    resp.body?.byteStream()?.use { stream ->
                                         BitmapFactory.decodeStream(stream)
                                     }
                                 } else null

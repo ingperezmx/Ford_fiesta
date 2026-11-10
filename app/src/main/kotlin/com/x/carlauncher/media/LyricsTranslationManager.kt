@@ -199,7 +199,7 @@ object LyricsTranslationManager {
 
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        val body = response.body()?.string() ?: return@use
+                        val body = response.body?.string() ?: return@use
                         val jsonArr = JSONArray(body)
                         val sentences = jsonArr.optJSONArray(0) ?: return@use
                         val sb = StringBuilder()

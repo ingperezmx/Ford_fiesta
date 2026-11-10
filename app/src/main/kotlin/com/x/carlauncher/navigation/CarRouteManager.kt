@@ -5,19 +5,20 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import com.google.android.gms.maps.model.LatLng
 import com.x.carlauncher.location.VehicleLocationManager
 import com.x.carlauncher.voice.CarVoiceAssistant
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import org.osmdroid.util.GeoPoint
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 /**
  * Maneuver classification for dynamic HUD navigation arrows and audio instructions.
@@ -42,7 +43,7 @@ data class NavTurnStep(
     val streetName: String,
     val distanceMeters: Double,
     val durationSeconds: Double,
-    val location: GeoPoint,
+    val location: LatLng,
     val maneuver: TurnManeuver = TurnManeuver.STRAIGHT
 )
 
@@ -51,9 +52,9 @@ data class NavTurnStep(
  */
 data class ActiveNavRoute(
     val destinationName: String,
-    val destinationPoint: GeoPoint,
-    val startPoint: GeoPoint,
-    val roadPoints: List<GeoPoint>,
+    val destinationPoint: LatLng,
+    val startPoint: LatLng,
+    val roadPoints: List<LatLng>,
     val totalDistanceMeters: Double,
     val totalDurationSeconds: Double,
     val steps: List<NavTurnStep> = emptyList(),
@@ -68,16 +69,21 @@ data class ActiveNavRoute(
 
 /**
  * Unified Global Navigation & Route Manager for X CarOS.
- * - Queries Open Source Routing Machine (OSRM) to calculate REAL street routes across Monterrey / Nuevo Leon.
+ * - Queries Google Routes API to calculate REAL street routes.
  * - Synchronizes active navigation route across ALL 3 map views.
  * - Allows launching turn-by-turn navigation directly in Google Maps.
- * - Solo datos reales: sin ubicaciones simuladas, sin rutas inventadas. Si OSRM no
- *   responde, no hay ruta (null) en vez de inventar una.
+ * - Solo datos reales: sin ubicaciones simuladas, sin rutas inventadas. Si
+ *   Routes API no responde, no hay ruta (null) en vez de inventar una.
  */
 object CarRouteManager {
 
     private const val TAG = "CarRouteManager"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
 
     // ── Unified Navigation State ───────────────────────────────────────────────
     private val _activeRoute = MutableStateFlow<ActiveNavRoute?>(null)
@@ -104,7 +110,7 @@ object CarRouteManager {
     /**
      * Launches official Google Maps Driving Navigation with live real-time traffic.
      */
-    fun openInGoogleMaps(context: Context, dest: GeoPoint, destName: String? = null) {
+    fun openInGoogleMaps(context: Context, dest: LatLng, destName: String? = null) {
         try {
             val uri = Uri.parse("google.navigation:q=${dest.latitude},${dest.longitude}&mode=d")
             val intent = Intent(Intent.ACTION_VIEW, uri).apply {
@@ -133,18 +139,19 @@ object CarRouteManager {
     }
 
     /**
-     * Calculates a real road network route using the OSRM Driving Engine.
+     * Calculates a real road network route using Google Routes API.
      * Follows physical streets, avenues, and highways. Never cuts through buildings or houses.
      */
     fun calculateRoute(
-        start: GeoPoint,
-        end: GeoPoint,
+        context: Context,
+        start: LatLng,
+        end: LatLng,
         destName: String,
         onComplete: ((ActiveNavRoute?) -> Unit)? = null
     ) {
         scope.launch {
             val route = withContext(Dispatchers.IO) {
-                fetchRealRoadRoute(start, end, destName)
+                fetchGoogleRoute(context, start, end, destName)
             }
             if (route != null) {
                 _activeRoute.value = route
@@ -155,139 +162,142 @@ object CarRouteManager {
         }
     }
 
-    private fun fetchRealRoadRoute(start: GeoPoint, end: GeoPoint, destName: String): ActiveNavRoute? {
-        // 1. Primary OSRM Server (HTTP port 80 - now explicitly permitted in network_security_config)
-        val route1 = queryOsrmEndpoint(
-            "https://router.project-osrm.org/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true",
-            start, end, destName
-        )
-        if (route1 != null) return route1
+    // ── Google Routes API ──────────────────────────────────────────────────────
+    // POST https://routes.googleapis.com/directions/v2:computeRoutes
+    // La llave se lee del meta-data del manifest en runtime (nunca va escrita
+    // en el codigo) y se mandan las cabeceras de identidad de la app, porque
+    // la llave esta restringida al paquete + huella SHA-1.
 
-        // 2. Secondary OSM Germany Routing Server
-        val route2 = queryOsrmEndpoint(
-            "https://routing.openstreetmap.de/routed-car/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true",
-            start, end, destName
-        )
-        if (route2 != null) return route2
+    private const val ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
+    private const val ROUTES_FIELD_MASK =
+        "routes.polyline.encodedPolyline," +
+        "routes.legs.distanceMeters,routes.legs.duration," +
+        "routes.legs.steps,routes.legs.steps.navigationInstruction," +
+        "routes.legs.steps.polyline,routes.legs.steps.distanceMeters," +
+        "routes.legs.steps.staticDuration"
 
-        // Sin ruta inventada: si OSRM no responde, no hay ruta.
-        return null
-    }
-
-    private fun queryOsrmEndpoint(urlFormat: String, start: GeoPoint, end: GeoPoint, destName: String): ActiveNavRoute? {
-        try {
-            val urlStr = String.format(
-                Locale.US,
-                urlFormat,
-                start.longitude, start.latitude, end.longitude, end.latitude
-            )
-            val url = URL(urlStr)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 7000
-                readTimeout = 7000
-                setRequestProperty("User-Agent", "XCarOS/1.0 (Android Automotive; Contact: support@pablo.car)")
+    private fun fetchGoogleRoute(context: Context, start: LatLng, end: LatLng, destName: String): ActiveNavRoute? {
+        val apiKey = GoogleApiKey.readApiKey(context)
+        if (apiKey.isNullOrBlank()) {
+            Log.w(TAG, "Sin llave de Google Maps en el manifest; no se puede calcular la ruta")
+            return null
+        }
+        return try {
+            val bodyJson = JSONObject().apply {
+                put("origin", JSONObject().apply {
+                    put("location", JSONObject().apply {
+                        put("latLng", JSONObject().apply {
+                            put("latitude", start.latitude)
+                            put("longitude", start.longitude)
+                        })
+                    })
+                })
+                put("destination", JSONObject().apply {
+                    put("location", JSONObject().apply {
+                        put("latLng", JSONObject().apply {
+                            put("latitude", end.latitude)
+                            put("longitude", end.longitude)
+                        })
+                    })
+                })
+                put("travelMode", "DRIVE")
+                put("routingPreference", "TRAFFIC_AWARE")
+                put("computeAlternativeRoutes", false)
+                put("languageCode", "es")
             }
-
-            if (conn.responseCode == 200) {
-                val reader = BufferedReader(InputStreamReader(conn.inputStream))
-                val response = reader.readText()
-                reader.close()
-                conn.disconnect()
-
-                val json = JSONObject(response)
-                if (json.optString("code") == "Ok") {
-                    val routes = json.getJSONArray("routes")
-                    if (routes.length() > 0) {
-                        val firstRoute = routes.getJSONObject(0)
-                        val totalDistance = firstRoute.optDouble("distance", 5000.0)
-                        val totalDuration = firstRoute.optDouble("duration", 600.0)
-
-                        // Parse road geometry coordinates: [[lon, lat], ...]
-                        val geometry = firstRoute.getJSONObject("geometry")
-                        val coords = geometry.getJSONArray("coordinates")
-                        val roadPoints = ArrayList<GeoPoint>(coords.length())
-                        for (i in 0 until coords.length()) {
-                            val coordPair = coords.getJSONArray(i)
-                            val lon = coordPair.getDouble(0)
-                            val lat = coordPair.getDouble(1)
-                            roadPoints.add(GeoPoint(lat, lon))
-                        }
-
-                        // Parse turn-by-turn steps
-                        val stepsList = mutableListOf<NavTurnStep>()
-                        val legs = firstRoute.optJSONArray("legs")
-                        if (legs != null && legs.length() > 0) {
-                            val leg0 = legs.getJSONObject(0)
-                            val stepsArray = leg0.optJSONArray("steps")
-                            if (stepsArray != null) {
-                                for (s in 0 until stepsArray.length()) {
-                                    val stepObj = stepsArray.getJSONObject(s)
-                                    val maneuver = stepObj.optJSONObject("maneuver")
-                                    val stepType = maneuver?.optString("type", "turn") ?: "turn"
-                                    val modifier = maneuver?.optString("modifier", "") ?: ""
-                                    val modLower = modifier.lowercase(Locale.ROOT)
-                                    val street = stepObj.optString("name", "Calle")
-                                    val dist = stepObj.optDouble("distance", 0.0)
-                                    val dur = stepObj.optDouble("duration", 0.0)
-
-                                    val turnManeuver = when {
-                                        stepType == "arrive" -> TurnManeuver.ARRIVED
-                                        modLower.contains("sharp left") -> TurnManeuver.SHARP_LEFT
-                                        modLower.contains("slight left") -> TurnManeuver.SLIGHT_LEFT
-                                        modLower.contains("left") -> TurnManeuver.LEFT
-                                        modLower.contains("sharp right") -> TurnManeuver.SHARP_RIGHT
-                                        modLower.contains("slight right") -> TurnManeuver.SLIGHT_RIGHT
-                                        modLower.contains("right") -> TurnManeuver.RIGHT
-                                        modLower.contains("uturn") -> TurnManeuver.U_TURN
-                                        else -> TurnManeuver.STRAIGHT
-                                    }
-
-                                    val inst = when (stepType) {
-                                        "depart" -> "Inicie el recorrido por $street"
-                                        "arrive" -> "Ha llegado a su destino: $destName"
-                                        "turn" -> when (modifier) {
-                                            "left" -> "Gire a la izquierda en $street"
-                                            "right" -> "Gire a la derecha en $street"
-                                            "slight left" -> "Incorporese levemente a la izquierda en $street"
-                                            "slight right" -> "Incorporese levemente a la derecha en $street"
-                                            "sharp left" -> "Giro pronunciado a la izquierda en $street"
-                                            "sharp right" -> "Giro pronunciado a la derecha en $street"
-                                            "uturn" -> "Retorno en U en $street"
-                                            else -> "Gire en $street"
-                                        }
-                                        "new name" -> "Continue recto por $street"
-                                        else -> "Continue por $street"
-                                    }
-                                    val mLoc = maneuver?.optJSONArray("location")
-                                    val pt = if (mLoc != null && mLoc.length() >= 2) {
-                                        GeoPoint(mLoc.getDouble(1), mLoc.getDouble(0))
-                                    } else {
-                                        start
-                                    }
-                                    stepsList.add(NavTurnStep(inst, street, dist, dur, pt, turnManeuver))
-                                }
-                            }
-                        }
-
-                        return ActiveNavRoute(
-                            destinationName = destName,
-                            destinationPoint = end,
-                            startPoint = start,
-                            roadPoints = roadPoints,
-                            totalDistanceMeters = totalDistance,
-                            totalDurationSeconds = totalDuration,
-                            steps = stepsList,
-                            isRealRoadData = true
-                        )
-                    }
+            val requestBuilder = Request.Builder()
+                .url(ROUTES_URL)
+                .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
+                .header("Content-Type", "application/json")
+                .header("X-Goog-Api-Key", apiKey)
+                .header("X-Goog-FieldMask", ROUTES_FIELD_MASK)
+            GoogleApiKey.androidIdentityHeaders(context).forEach { (k, v) ->
+                requestBuilder.header(k, v)
+            }
+            httpClient.newCall(requestBuilder.build()).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    val errBody = resp.body?.string().orEmpty()
+                    Log.w(TAG, "Routes API HTTP ${resp.code}: ${errBody.take(300)}")
+                    return null
                 }
-            } else {
-                conn.disconnect()
+                val body = resp.body?.string() ?: return null
+                parseRoutesResponse(JSONObject(body), start, end, destName)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "OSRM query error on $urlFormat", e)
+            Log.w(TAG, "Routes API query error", e)
+            null
         }
-        return null
+    }
+
+    private fun parseRoutesResponse(json: JSONObject, start: LatLng, end: LatLng, destName: String): ActiveNavRoute? {
+        val routes = json.optJSONArray("routes") ?: return null
+        if (routes.length() == 0) return null
+        val firstRoute = routes.getJSONObject(0)
+
+        val encoded = firstRoute.optJSONObject("polyline")?.optString("encodedPolyline").orEmpty()
+        val roadPoints = if (encoded.isNotBlank()) decodePolyline(encoded) else emptyList()
+        if (roadPoints.isEmpty()) return null
+
+        val legs = firstRoute.optJSONArray("legs") ?: return null
+        if (legs.length() == 0) return null
+        val leg0 = legs.getJSONObject(0)
+        val totalDistance = leg0.optDouble("distanceMeters", 0.0)
+        val totalDuration = parseDurationSeconds(leg0.optString("duration", ""))
+
+        // Parse turn-by-turn steps
+        val stepsList = mutableListOf<NavTurnStep>()
+        val stepsArray = leg0.optJSONArray("steps")
+        if (stepsArray != null) {
+            for (s in 0 until stepsArray.length()) {
+                val stepObj = stepsArray.getJSONObject(s)
+                val nav = stepObj.optJSONObject("navigationInstruction")
+                val maneuverRaw = nav?.optString("maneuver", "") ?: ""
+                val instructionRaw = nav?.optString("instructions", "") ?: ""
+                val dist = stepObj.optDouble("distanceMeters", 0.0)
+                val dur = parseDurationSeconds(stepObj.optString("staticDuration", ""))
+
+                // Ubicacion de la maniobra: primer punto de la polilinea del paso.
+                val stepPolyline = stepObj.optJSONObject("polyline")?.optString("encodedPolyline").orEmpty()
+                val stepPoints = if (stepPolyline.isNotBlank()) decodePolyline(stepPolyline) else emptyList()
+                val stepLoc = stepPoints.firstOrNull() ?: start
+
+                val turnManeuver = when (maneuverRaw) {
+                    "ARRIVE" -> TurnManeuver.ARRIVED
+                    "TURN_SHARP_LEFT" -> TurnManeuver.SHARP_LEFT
+                    "TURN_SLIGHT_LEFT", "RAMP_LEFT", "FORK_LEFT", "ROUNDABOUT_LEFT" -> TurnManeuver.SLIGHT_LEFT
+                    "TURN_LEFT" -> TurnManeuver.LEFT
+                    "TURN_SHARP_RIGHT" -> TurnManeuver.SHARP_RIGHT
+                    "TURN_SLIGHT_RIGHT", "RAMP_RIGHT", "FORK_RIGHT", "ROUNDABOUT_RIGHT" -> TurnManeuver.SLIGHT_RIGHT
+                    "TURN_RIGHT" -> TurnManeuver.RIGHT
+                    "U_TURN" -> TurnManeuver.U_TURN
+                    else -> TurnManeuver.STRAIGHT
+                }
+
+                val instruction = when {
+                    maneuverRaw == "ARRIVE" -> "Ha llegado a su destino: $destName"
+                    maneuverRaw == "DEPART" -> instructionRaw.ifBlank { "Inicie el recorrido" }
+                    instructionRaw.isNotBlank() -> instructionRaw
+                    else -> "Continúe por la ruta"
+                }
+                stepsList.add(NavTurnStep(instruction, "", dist, dur, stepLoc, turnManeuver))
+            }
+        }
+
+        return ActiveNavRoute(
+            destinationName = destName,
+            destinationPoint = end,
+            startPoint = start,
+            roadPoints = roadPoints,
+            totalDistanceMeters = totalDistance,
+            totalDurationSeconds = totalDuration,
+            steps = stepsList,
+            isRealRoadData = true
+        )
+    }
+
+    /** Duraciones de Routes API vienen como texto "123s" (google.protobuf.Duration). */
+    private fun parseDurationSeconds(raw: String): Double {
+        return raw.trim().removeSuffix("s").toDoubleOrNull() ?: 0.0
     }
 
     /**
@@ -295,7 +305,7 @@ object CarRouteManager {
      * Sigue la posicion REAL del GPS (VehicleLocationManager): sin fix muestra
      * "Esperando señal GPS real..."; llega al destino a menos de 40 m.
      * Las maniobras e instrucciones se calculan con las distancias reales
-     * desde la posicion GPS hasta cada paso de la ruta OSRM.
+     * desde la posicion GPS hasta cada paso de la ruta de Google.
      */
     fun startNavigation(context: Context, route: ActiveNavRoute) {
         _activeRoute.value = route
@@ -321,7 +331,7 @@ object CarRouteManager {
                     delay(1000)
                     continue
                 }
-                val currentPos = GeoPoint(loc.latitude, loc.longitude)
+                val currentPos = LatLng(loc.latitude, loc.longitude)
 
                 // Llegada: a menos de 40 m del destino
                 if (calculateDistanceMeters(currentPos, route.destinationPoint) <= 40.0) {
@@ -392,16 +402,17 @@ object CarRouteManager {
     }
 
     // ── Progreso en vivo por la ruta ──────────────────────────────────────────
-    // La distancia y el ETA del HUD eran los totales fijos del calculo OSRM
+    // La distancia y el ETA del HUD eran los totales fijos del calculo
     // inicial y nunca bajaban mientras el auto avanzaba, y la polilinea se
     // quedaba completa. Estas funciones calculan en vivo, desde la posicion
-    // GPS actual, lo que falta por recorrer siguiendo la ruta.
+    // GPS actual, lo que falta por recorrer siguiendo la ruta. Son agnosticas
+    // a la API de rutas: trabajan solo sobre la polilinea.
 
-    private data class NearestOnRoute(val segmentIndex: Int, val closest: GeoPoint, val distanceMeters: Double)
+    private data class NearestOnRoute(val segmentIndex: Int, val closest: LatLng, val distanceMeters: Double)
 
     // Punto de la polilinea mas cercano a la posicion actual (proyeccion
     // equirectangular local, suficiente a escala de ciudad). Null sin puntos.
-    private fun nearestOnRoute(currentPos: GeoPoint, route: ActiveNavRoute): NearestOnRoute? {
+    private fun nearestOnRoute(currentPos: LatLng, route: ActiveNavRoute): NearestOnRoute? {
         val pts = route.roadPoints
         if (pts.size < 2) return null
         val lat0 = Math.toRadians(currentPos.latitude)
@@ -428,7 +439,7 @@ object CarRouteManager {
             val d = Math.hypot(px - cx, py - cy)
             if (d < bestDist) {
                 bestDist = d
-                best = NearestOnRoute(i, GeoPoint(cy / ky, cx / kx), d)
+                best = NearestOnRoute(i, LatLng(cy / ky, cx / kx), d)
             }
         }
         return best
@@ -437,7 +448,7 @@ object CarRouteManager {
     // Distancia real restante (metros) por la ruta hasta el destino. Si el
     // auto esta fuera de la ruta (mas de 150 m de la polilinea), devuelve la
     // distancia directa al destino en vez de inventar un tramo de ruta.
-    fun remainingRoadDistanceMeters(currentPos: GeoPoint, route: ActiveNavRoute): Double {
+    fun remainingRoadDistanceMeters(currentPos: LatLng, route: ActiveNavRoute): Double {
         val pts = route.roadPoints
         if (pts.isEmpty()) return calculateDistanceMeters(currentPos, route.destinationPoint)
         val nearest = nearestOnRoute(currentPos, route)
@@ -454,28 +465,28 @@ object CarRouteManager {
     // Puntos de la ruta que faltan por recorrer, desde el punto mas cercano
     // hasta el destino. Sirve para recortar la polilinea mientras se avanza.
     // Si el auto esta fuera de la ruta, devuelve la ruta completa.
-    fun remainingRoadPoints(currentPos: GeoPoint, route: ActiveNavRoute): List<GeoPoint> {
+    fun remainingRoadPoints(currentPos: LatLng, route: ActiveNavRoute): List<LatLng> {
         val pts = route.roadPoints
         if (pts.isEmpty()) return pts
         val nearest = nearestOnRoute(currentPos, route)
         if (nearest == null || nearest.distanceMeters > 150.0) return pts
-        val out = ArrayList<GeoPoint>(pts.size - nearest.segmentIndex)
+        val out = ArrayList<LatLng>(pts.size - nearest.segmentIndex)
         out.add(nearest.closest)
         for (i in nearest.segmentIndex + 1 until pts.size) out.add(pts[i])
         return out
     }
 
-    // Tiempo restante estimado (segundos): la duracion OSRM escalada por la
-    // fraccion de ruta que falta. Suave y sin saltos (no depende de la
+    // Tiempo restante estimado (segundos): la duracion de Routes API escalada
+    // por la fraccion de ruta que falta. Suave y sin saltos (no depende de la
     // velocidad instantanea, que en un semaforo es 0).
-    fun remainingEtaSeconds(currentPos: GeoPoint, route: ActiveNavRoute): Double {
+    fun remainingEtaSeconds(currentPos: LatLng, route: ActiveNavRoute): Double {
         if (route.totalDistanceMeters <= 0.0) return route.totalDurationSeconds
         val remaining = remainingRoadDistanceMeters(currentPos, route)
         val ratio = (remaining / route.totalDistanceMeters).coerceIn(0.0, 1.0)
         return route.totalDurationSeconds * ratio
     }
 
-    private fun calculateDistanceMeters(p1: GeoPoint, p2: GeoPoint): Double {
+    private fun calculateDistanceMeters(p1: LatLng, p2: LatLng): Double {
         val earthRadius = 6371000.0 // meters
         val dLat = Math.toRadians(p2.latitude - p1.latitude)
         val dLon = Math.toRadians(p2.longitude - p1.longitude)
@@ -485,4 +496,40 @@ object CarRouteManager {
         val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
         return earthRadius * c
     }
+}
+
+/**
+ * Decodifica una polilinea codificada de Google (algoritmo de codificacion
+ * de polilineas) a una lista de LatLng.
+ */
+internal fun decodePolyline(encoded: String): List<LatLng> {
+    val points = ArrayList<LatLng>()
+    var index = 0
+    var lat = 0
+    var lng = 0
+    while (index < encoded.length) {
+        var shift = 0
+        var result = 0
+        var b: Int
+        do {
+            b = encoded[index++].code - 63
+            result = result or ((b and 0x1f) shl shift)
+            shift += 5
+        } while (b >= 0x20)
+        val dLat = if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
+        lat += dLat
+
+        shift = 0
+        result = 0
+        do {
+            b = encoded[index++].code - 63
+            result = result or ((b and 0x1f) shl shift)
+            shift += 5
+        } while (b >= 0x20)
+        val dLng = if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
+        lng += dLng
+
+        points.add(LatLng(lat / 1E5, lng / 1E5))
+    }
+    return points
 }
