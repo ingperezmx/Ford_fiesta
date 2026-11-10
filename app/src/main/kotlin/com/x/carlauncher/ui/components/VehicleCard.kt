@@ -17,6 +17,12 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.FilterQuality
+import kotlin.math.sin
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -176,6 +182,62 @@ fun VehicleCard(
         targetValue = if (isMovingOver10) rawSuspension * 1.8f else 0f,
         animationSpec = tween(durationMillis = 150),
         label = "carTransY"
+    )
+
+    // Animaciones orgánicas de avance en carretera para la vista trasera del Fiesta
+    val cruiseBounce by infiniteTransition.animateFloat(
+        initialValue = -1.6f,
+        targetValue = 1.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 380, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "cruiseBounce"
+    )
+    val roadJitter by infiniteTransition.animateFloat(
+        initialValue = -0.6f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 160, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "roadJitter"
+    )
+    val cruiseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.022f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "cruiseScale"
+    )
+    val laneSway by infiniteTransition.animateFloat(
+        initialValue = -1.8f,
+        targetValue = 1.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laneSway"
+    )
+    val roadProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "roadProgress"
+    )
+    val tailGlowPulse by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 550, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "tailGlowPulse"
     )
 
     Card(
@@ -341,14 +403,101 @@ fun VehicleCard(
                                         )
                                     }
                             ) {
-                                // Background photo: Ford Fiesta on cybernetic highway at night with speed streaks
-                                Image(
-                                    painter = painterResource(R.drawable.fiesta_highway_driving),
-                                    contentDescription = "Ford Fiesta en carretera",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                    colorFilter = activeFiestaColor.highwayColorFilter
-                                )
+                                // Contenedor animado del Ford Fiesta avanzando en carretera con suspensión y micro-vibración
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            scaleX = cruiseScale
+                                            scaleY = cruiseScale
+                                            translationY = cruiseBounce + roadJitter
+                                            translationX = laneSway
+                                            rotationZ = (targetTurnAngle / 68f * 1.8f) + (laneSway * 0.12f)
+                                        }
+                                ) {
+                                    // Foto en alta fidelidad del Ford Fiesta avanzando
+                                    Image(
+                                        painter = painterResource(R.drawable.fiesta_highway_driving),
+                                        contentDescription = "Ford Fiesta en carretera",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                        colorFilter = activeFiestaColor.highwayColorFilter
+                                    )
+
+                                    // Rayas viales y destellos de avance continuo en perspectiva
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val w = size.width
+                                        val h = size.height
+                                        val vpX = w * 0.50f
+                                        val vpY = h * 0.35f
+
+                                        // 1. Rayas divisorias centrales avanzando desde el auto hacia el frente
+                                        for (i in 0 until 5) {
+                                            val p = (roadProgress + i * 0.20f) % 1.0f
+                                            val py = 0.44f + 0.56f * (p * p)
+                                            val y = h * py
+                                            val x = vpX + (targetTurnAngle / 68f * 12.dp.toPx()) * (p * p)
+                                            val dashW = (3.5.dp.toPx() * p).coerceAtLeast(1.2.dp.toPx())
+                                            val dashH = (14.dp.toPx() * p).coerceAtLeast(3.dp.toPx())
+                                            val alpha = (sin(p * Math.PI.toFloat()) * 0.75f).coerceIn(0f, 0.75f)
+
+                                            drawRoundRect(
+                                                color = Color.White.copy(alpha = alpha),
+                                                topLeft = Offset(x - dashW / 2, y),
+                                                size = Size(dashW, dashH),
+                                                cornerRadius = CornerRadius(2.dp.toPx())
+                                            )
+                                        }
+
+                                        // 2. Destellos cian de velocidad en los guardarraíles laterales
+                                        for (i in 0 until 4) {
+                                            val p = (roadProgress + i * 0.25f) % 1.0f
+                                            val railY = vpY + (h * 0.52f) * (p * p)
+                                            val railLeftX = vpX - (w * 0.52f) * (p * p)
+                                            val railRightX = vpX + (w * 0.52f) * (p * p)
+                                            val glowRadius = 14.dp.toPx() * p
+                                            val railAlpha = (sin(p * Math.PI.toFloat()) * 0.85f).coerceIn(0f, 0.85f)
+
+                                            if (glowRadius > 1.dp.toPx()) {
+                                                drawCircle(
+                                                    brush = Brush.radialGradient(
+                                                        colors = listOf(Color(0xFF00E5FF).copy(alpha = railAlpha), Color.Transparent),
+                                                        center = Offset(railLeftX, railY),
+                                                        radius = glowRadius
+                                                    ),
+                                                    radius = glowRadius,
+                                                    center = Offset(railLeftX, railY)
+                                                )
+                                                drawCircle(
+                                                    brush = Brush.radialGradient(
+                                                        colors = listOf(Color(0xFF00E5FF).copy(alpha = railAlpha), Color.Transparent),
+                                                        center = Offset(railRightX, railY),
+                                                        radius = glowRadius
+                                                    ),
+                                                    radius = glowRadius,
+                                                    center = Offset(railRightX, railY)
+                                                )
+                                            }
+                                        }
+
+                                        // 3. Resplandor pulsante en el asfalto (luces traseras rojas y neón cian bajo el auto)
+                                        val carCenterY = h * 0.74f
+                                        val carCenterX = vpX + laneSway
+                                        drawOval(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    Color(0xFFEF4444).copy(alpha = tailGlowPulse * 0.35f),
+                                                    Color(0xFF00E5FF).copy(alpha = tailGlowPulse * 0.20f),
+                                                    Color.Transparent
+                                                ),
+                                                center = Offset(carCenterX, carCenterY),
+                                                radius = 42.dp.toPx()
+                                            ),
+                                            topLeft = Offset(carCenterX - 48.dp.toPx(), carCenterY - 14.dp.toPx()),
+                                            size = Size(96.dp.toPx(), 28.dp.toPx())
+                                        )
+                                    }
+                                }
 
                                 // Dynamic 3D Glowing Navigation Arrow pointing along route
                                 val animatedTurnRotation by animateFloatAsState(
@@ -860,6 +1009,7 @@ private fun CarSlotLayer(
                 bitmap             = customBitmap,
                 contentDescription = slot.title,
                 contentScale       = androidx.compose.ui.layout.ContentScale.Fit,
+                filterQuality      = FilterQuality.High,
                 modifier           = modifier.graphicsLayer { this.alpha = alpha },
                 colorFilter        = colorFilter
             )

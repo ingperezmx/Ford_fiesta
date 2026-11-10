@@ -1,6 +1,7 @@
 ﻿package com.x.carlauncher.carassets
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
@@ -111,9 +112,12 @@ object CarAssetManager {
 
     fun getCustomBitmap(context: Context, slot: CarSlot): ImageBitmap? {
         val file = File(getStorageDir(context), slot.filename)
+        val opts = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
         if (file.exists()) {
             try {
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath, opts)
                 if (bitmap != null) return bitmap.asImageBitmap()
             } catch (e: Exception) {
                 Log.w(TAG, "Error decoding file ${file.absolutePath}", e)
@@ -122,7 +126,7 @@ object CarAssetManager {
         // Direct fallback to bundled APK assets
         return try {
             context.assets.open("default_car_assets/${slot.filename}").use { stream ->
-                val bitmap = BitmapFactory.decodeStream(stream)
+                val bitmap = BitmapFactory.decodeStream(stream, null, opts)
                 bitmap?.asImageBitmap()
             }
         } catch (e: Exception) {
