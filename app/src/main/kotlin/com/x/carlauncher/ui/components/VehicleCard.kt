@@ -137,7 +137,8 @@ fun VehicleCard(
     val targetTurnAngle by CarRouteManager.targetTurnAngle.collectAsState()
     val distanceToNextManeuver by CarRouteManager.distanceToNextManeuver.collectAsState()
     var isPreviewHighwayMode by remember { mutableStateOf(false) }
-    val isDrivingHighway = isMovingOver10 || isPreviewHighwayMode
+    val isNavigatingOrRoute = isNavigatingRoute || activeRoute != null
+    val isDrivingHighway = isMovingOver10 || isPreviewHighwayMode || isNavigatingOrRoute
 
     // Smooth dynamic highway sway and suspension motion
     val infiniteTransition = rememberInfiniteTransition(label = "carMovementAnim")
