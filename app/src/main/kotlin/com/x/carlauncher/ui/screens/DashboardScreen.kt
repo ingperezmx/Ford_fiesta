@@ -327,15 +327,78 @@ fun DashboardScreen() {
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
 
-                            // 1. COLUMNA IZQUIERDA: Ford Fiesta 2016 Sedan + Clima
-                            VehicleCard(
-                                doorState   = doorState,
-                                weatherData = weatherData,
-                                modifier    = Modifier
-                                    .weight(0.35f)
+                            // 1. COLUMNA IZQUIERDA: YouTube Music + Velocimetro + Hey Google (Módulos reubicados)
+                            Column(
+                                modifier = Modifier
+                                    .weight(0.28f)
                                     .fillMaxHeight(),
-                                onCarDetailsClick = { currentPage = 2 }
-                            )
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                MusicPlayerCard(
+                                    mediaState      = displayMediaState,
+                                    onPrevious      = {
+                                        if (isRadioPlaying && activeRadioStation != null) {
+                                            val idx = RadioManager.stations.indexOf(activeRadioStation)
+                                            val prevIdx = if (idx > 0) idx - 1 else RadioManager.stations.size - 1
+                                            RadioManager.playStation(context, RadioManager.stations[prevIdx])
+                                        } else {
+                                            mediaVm.skipToPrevious(context)
+                                        }
+                                    },
+                                    onPlayPause     = {
+                                        if (activeRadioStation != null) {
+                                            RadioManager.togglePlay(context, activeRadioStation!!)
+                                        } else {
+                                            mediaVm.togglePlayPause(context)
+                                        }
+                                    },
+                                    onNext          = {
+                                        if (isRadioPlaying && activeRadioStation != null) {
+                                            val idx = RadioManager.stations.indexOf(activeRadioStation)
+                                            val nextIdx = (idx + 1) % RadioManager.stations.size
+                                            RadioManager.playStation(context, RadioManager.stations[nextIdx])
+                                        } else {
+                                            mediaVm.skipToNext(context)
+                                        }
+                                    },
+                                    onSeek          = { pos -> mediaVm.seekTo(context, pos) },
+                                    onToggleShuffle = { mediaVm.toggleShuffle(context) },
+                                    onToggleRepeat  = { mediaVm.toggleRepeat(context) },
+                                    onLoadLrc       = { uri -> mediaVm.loadLrcFromUri(context, uri) },
+                                    onOpenPlayer    = {
+                                        currentPage = 1
+                                        selectedTab = 3
+                                    },
+                                    modifier        = Modifier
+                                        .weight(1.30f)
+                                        .fillMaxWidth()
+                                )
+                                SpeedometerCard(
+                                    speedMph    = displaySpeedMph,
+                                    obdData     = obdData,
+                                    onObdClick  = {
+                                        com.x.carlauncher.obd.ObdManager.retryConnection()
+                                        currentPage = 2
+                                    },
+                                    onCardClick = {
+                                        currentPage = 2
+                                    },
+                                    modifier    = Modifier
+                                        .weight(0.85f)
+                                        .fillMaxWidth()
+                                )
+                                GeminiCard(
+                                    isListening     = isVoiceListening,
+                                    recognizedText  = recognizedVoiceText,
+                                    feedback        = assistantFeedback,
+                                    audioRmsLevel   = audioRmsLevel,
+                                    onMicClick      = { voiceController.startListening() },
+                                    onCommandClick  = { cmd -> voiceController.executeVoiceCommand(cmd) },
+                                    modifier        = Modifier
+                                        .weight(0.85f)
+                                        .fillMaxWidth()
+                                )
+                            }
 
                             // 2. COLUMNA CENTRAL: Navegacion GPS + Modulo de Mensajes WhatsApp (o Cluster)
                             Column(
@@ -409,78 +472,15 @@ fun DashboardScreen() {
                                 }
                             }
 
-                            // 3. COLUMNA DERECHA: YouTube Music + Velocimetro + Hey Google
-                            Column(
-                                modifier = Modifier
-                                    .weight(0.28f)
+                            // 3. COLUMNA DERECHA: Ford Fiesta 2016 Sedan + Clima (Módulo reubicado)
+                            VehicleCard(
+                                doorState   = doorState,
+                                weatherData = weatherData,
+                                modifier    = Modifier
+                                    .weight(0.35f)
                                     .fillMaxHeight(),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                MusicPlayerCard(
-                                    mediaState      = displayMediaState,
-                                    onPrevious      = {
-                                        if (isRadioPlaying && activeRadioStation != null) {
-                                            val idx = RadioManager.stations.indexOf(activeRadioStation)
-                                            val prevIdx = if (idx > 0) idx - 1 else RadioManager.stations.size - 1
-                                            RadioManager.playStation(context, RadioManager.stations[prevIdx])
-                                        } else {
-                                            mediaVm.skipToPrevious(context)
-                                        }
-                                    },
-                                    onPlayPause     = {
-                                        if (activeRadioStation != null) {
-                                            RadioManager.togglePlay(context, activeRadioStation!!)
-                                        } else {
-                                            mediaVm.togglePlayPause(context)
-                                        }
-                                    },
-                                    onNext          = {
-                                        if (isRadioPlaying && activeRadioStation != null) {
-                                            val idx = RadioManager.stations.indexOf(activeRadioStation)
-                                            val nextIdx = (idx + 1) % RadioManager.stations.size
-                                            RadioManager.playStation(context, RadioManager.stations[nextIdx])
-                                        } else {
-                                            mediaVm.skipToNext(context)
-                                        }
-                                    },
-                                    onSeek          = { pos -> mediaVm.seekTo(context, pos) },
-                                    onToggleShuffle = { mediaVm.toggleShuffle(context) },
-                                    onToggleRepeat  = { mediaVm.toggleRepeat(context) },
-                                    onLoadLrc       = { uri -> mediaVm.loadLrcFromUri(context, uri) },
-                                    onOpenPlayer    = {
-                                        currentPage = 1
-                                        selectedTab = 3
-                                    },
-                                    modifier        = Modifier
-                                        .weight(1.30f)
-                                        .fillMaxWidth()
-                                )
-                                SpeedometerCard(
-                                    speedMph    = displaySpeedMph,
-                                    obdData     = obdData,
-                                    onObdClick  = {
-                                        com.x.carlauncher.obd.ObdManager.retryConnection()
-                                        currentPage = 2
-                                    },
-                                    onCardClick = {
-                                        currentPage = 2
-                                    },
-                                    modifier    = Modifier
-                                        .weight(0.85f)
-                                        .fillMaxWidth()
-                                )
-                                GeminiCard(
-                                    isListening     = isVoiceListening,
-                                    recognizedText  = recognizedVoiceText,
-                                    feedback        = assistantFeedback,
-                                    audioRmsLevel   = audioRmsLevel,
-                                    onMicClick      = { voiceController.startListening() },
-                                    onCommandClick  = { cmd -> voiceController.executeVoiceCommand(cmd) },
-                                    modifier        = Modifier
-                                        .weight(0.85f)
-                                        .fillMaxWidth()
-                                )
-                            }
+                                onCarDetailsClick = { currentPage = 2 }
+                            )
                         }
                     } else if (currentPage == 1) {
                         // ── PAGINA 1: REPRODUCTOR MUSICAL AMPLIADO ─────────────

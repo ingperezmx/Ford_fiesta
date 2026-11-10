@@ -101,7 +101,27 @@ fun ExpandedMusicScreen(
     ) {
 
         // =====================================================================
-        // 1. COLUMNA IZQUIERDA (27%): REPRODUCTOR MASTER
+        // 1. COLUMNA IZQUIERDA (37%): SINTONIZADOR DE RADIO FM & STREAMING (Reubicado)
+        // =====================================================================
+        RadioFmCard(
+            modifier = Modifier
+                .weight(0.37f)
+                .fillMaxHeight()
+        )
+
+        // =====================================================================
+        // 2. COLUMNA CENTRAL (36%): YOUTUBE MUSIC (controles multimedia)
+        // =====================================================================
+        if (!isKaraokeExpanded) {
+            YouTubeMusicPanel(
+                modifier = Modifier
+                    .weight(0.36f)
+                    .fillMaxHeight()
+            )
+        }
+
+        // =====================================================================
+        // 3. COLUMNA DERECHA (27%): REPRODUCTOR MASTER (Reubicado)
         // =====================================================================
         Card(
             modifier = Modifier
@@ -583,29 +603,6 @@ fun ExpandedMusicScreen(
             }
         }
 
-        // =====================================================================
-        // =====================================================================
-        // 2. COLUMNA CENTRAL (36%): YOUTUBE MUSIC (controles multimedia)
-        //    Lo que suena, play/pausa, siguiente/anterior, progreso y volumen.
-        //    La musica se elige en la app de YouTube Music.
-        // =====================================================================
-        if (!isKaraokeExpanded) {
-            YouTubeMusicPanel(
-                modifier = Modifier
-                    .weight(0.36f)
-                    .fillMaxHeight()
-            )
-        }
-
-        // =====================================================================
-        // 3. COLUMNA DERECHA (37%): SINTONIZADOR DE RADIO FM & STREAMING
-        //    Estaciones de Monterrey, Rock Alternativo, Ska y Rock en Espanol
-        // =====================================================================
-        RadioFmCard(
-            modifier = Modifier
-                .weight(0.37f)
-                .fillMaxHeight()
-        )
     }
 }
 
