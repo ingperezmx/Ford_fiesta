@@ -35,7 +35,7 @@ android {
         } else {
             emptyMap()
         }
-        val mapsApiKey = localProps["MAPS_API_KEY"] ?: System.getenv("MAPS_API_KEY") ?: "AIzaSyC53rgr57aa3Jd-SoXp1i1PnQW03Sb0EvI"
+        val mapsApiKey = localProps["MAPS_API_KEY"] ?: System.getenv("MAPS_API_KEY") ?: "AIzaSyC53rgr57aa3Jd-SoXp1i1PnQWO3SbOEvI"
         val owmApiKey = localProps["OWM_API_KEY"] ?: System.getenv("OWM_API_KEY") ?: ""
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         resValue("string", "owm_api_key", owmApiKey)
