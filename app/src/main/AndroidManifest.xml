@@ -94,7 +94,8 @@
         android:label="Car Launcher"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- Clave Oficial de Validación de Google Maps -->
         <meta-data
